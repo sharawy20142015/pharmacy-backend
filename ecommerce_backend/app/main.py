@@ -1,4 +1,5 @@
-﻿import os
+﻿# app/main.py
+import os
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from sqladmin.authentication import AuthenticationBackend
@@ -6,6 +7,10 @@ from starlette.requests import Request
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+# --- استيراد أدوات قاعدة البيانات ---
+from app.db.base import Base  # تأكد أن هذا الملف يستورد كل الموديلات
+from app.db.session import async_engine
 
 # 1. استيراد الراوترز
 from app.modules.orders import router as order_router 
@@ -31,6 +36,16 @@ async def lifespan(app: FastAPI):
     print("---------------------------------------")
     print("🚀 Sharawy Pharmacy System Starting...")
     
+    # الخطوة الحاسمة: إنشاء الجداول في قاعدة البيانات إذا لم تكن موجودة
+    try:
+        print("🏗️  Checking Database Schema...")
+        async with async_engine.begin() as conn:
+            # هذا السطر يقرأ كل الـ Classes المربوطة بـ Base وينشئها كجداول
+            await conn.run_sync(Base.metadata.create_all)
+        print("✅ Database Schema: Ready")
+    except Exception as e:
+        print(f"❌ Critical Error during Schema creation: {e}")
+
     # تنفيذ إضافة بيانات الشحن تلقائياً
     try:
         await auto_seed_shipping()
@@ -59,7 +74,6 @@ app = FastAPI(
 )
 
 # --- سحب الإعدادات من الـ Environment Variables ---
-# نضع قيم افتراضية (Fallback) في حال عدم وجود الملف للأمان
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback_secret_key_67890")
 ADMIN_USER = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASSWORD", "sharawy123")
@@ -76,6 +90,9 @@ app.add_middleware(
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # --- Static Files ---
+# تأكد من وجود مجلد باسم static في مجلد المشروع الرئيسي
+if not os.path.exists("static"):
+    os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- تسجيل الراوترز ---
@@ -107,7 +124,7 @@ class AdminAuth(AuthenticationBackend):
     async def authenticate(self, request: Request) -> bool:
         return request.session.get("token") == "admin_access_granted"
 
-# تمرير الـ Secret Key المسحوب من الـ env أيضاً هنا
+# تمرير الـ Secret Key المسحوب من الـ env أيضاً هنا لوحة التحكم
 setup_admin(app, AdminAuth(secret_key=SECRET_KEY))
 
 @app.get('/')
