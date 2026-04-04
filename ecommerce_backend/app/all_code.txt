@@ -1,0 +1,4192 @@
+﻿
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\admin_portal.py ====
+
+# E:\Sharawy\PharmacyApp\ecommerce_backend\app\admin_portal.py
+
+import random
+import string
+from pathlib import Path
+from sqladmin import Admin, ModelView, BaseView, expose
+from starlette.responses import RedirectResponse, StreamingResponse
+from sqlalchemy import select
+from datetime import datetime
+
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…Ø­Ø±Ùƒ ÙˆØ¬Ù„Ø³Ø© Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+from app.db.session import async_engine, AsyncSessionLocal
+
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ù…ÙˆØ¯ÙŠÙˆÙ„ Ø§Ù„Ù€ Bulk Ø§Ù„Ø¬Ø¯ÙŠØ¯
+from app.modules.bulk_manager.services import BulkService
+from app.modules.bulk_manager.template_factory import create_bulk_template
+
+# ØªØ­Ø¯ÙŠØ¯ Ù…Ø³Ø§Ø± Ù…Ø¬Ù„Ø¯ Ø§Ù„Ù‚ÙˆØ§Ù„Ø¨
+BASE_DIR = Path(__file__).resolve().parent
+templates_dir = BASE_DIR / "templates"
+
+# --- Ø¯Ø§Ù„Ø© ØªÙˆÙ„ÙŠØ¯ SKU ØªÙ„Ù‚Ø§Ø¦ÙŠ ---
+def simple_generate_sku():
+    digits = ''.join(random.choices(string.digits, k=6))
+    return f"SKU{digits}"
+
+# ==========================================
+# Ø¯Ø§Ù„Ø© Ø¥Ø¹Ø¯Ø§Ø¯ Ù„ÙˆØ­Ø© Ø§Ù„ØªØ­ÙƒÙ… (Setup)
+# ==========================================
+
+def setup_admin(app, authentication_backend):
+    # Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª
+    from app.models.user import User, Customer, PointsTransaction
+    from app.models import (
+        ShortItemNo, Purchase, Sales, Trip, Category, 
+        Warehouse, Supplier, ReturnSales, 
+        Classification, Product, ProductImage, Banner, 
+        Tag, Coupon
+    )
+    from app.modules.orders.models import Order, OrderItem, OrderStatus
+
+    admin = Admin(
+        app=app, 
+        engine=async_engine, 
+        authentication_backend=authentication_backend,
+        templates_dir=str(templates_dir), 
+        title="Sharawy Pharmacy Admin",
+        base_url="/admin",
+        logo_url="https://cdn-icons-png.flaticon.com/512/883/883356.png"
+    )
+
+    # ==========================================
+    # 1. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† ÙˆØ§Ù„ÙˆÙ„Ø§Ø¡
+    # ==========================================
+    class UserAdmin(ModelView, model=User):
+        name_plural = "Users & Permissions"
+        category = "User Management"
+        icon = "fa-solid fa-user-shield"
+        column_list = [User.id, User.name, User.email, User.role, User.is_active]
+        column_searchable_list = [User.name, User.email]
+
+    class CustomerAdmin(ModelView, model=Customer):
+        name_plural = "Loyalty Profiles"
+        category = "User Management"
+        icon = "fa-solid fa-users"
+        column_list = [Customer.id, Customer.customer_code, Customer.total_points, Customer.is_chronic]
+        column_searchable_list = [Customer.customer_code, Customer.phone]
+
+    # ==========================================
+    # 2. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ø¨ÙŠØ¹Ø§Øª ÙˆØ§Ù„Ø·Ù„Ø¨Ø§Øª
+    # ==========================================
+    class OrderAdmin(ModelView, model=Order):
+        name_plural = "1. Customer Orders"
+        category = "Order Management"
+        icon = "fa-solid fa-cart-shopping"
+        column_list = [Order.order_number, Order.shipping_first_name, Order.total_final_amount, Order.status, Order.date]
+        column_sortable_list = [Order.date, Order.total_final_amount]
+        column_searchable_list = [Order.order_number, Order.shipping_phone]
+        
+        column_formatters = {
+            Order.status: lambda m, a: f"ðŸ•’ {m.status.value}" if m.status == OrderStatus.PENDING 
+            else f"ðŸšš {m.status.value}" if m.status == OrderStatus.SHIPPED
+            else f"âœ… {m.status.value}"
+        }
+
+    class OrderItemAdmin(ModelView, model=OrderItem):
+        name_plural = "2. Order Items"
+        category = "Order Management"
+        icon = "fa-solid fa-list-ul"
+        column_list = [OrderItem.order, OrderItem.product, OrderItem.quantity, OrderItem.unit_price, OrderItem.subtotal]
+
+    class CouponAdmin(ModelView, model=Coupon):
+        name_plural = "3. Discount Coupons"
+        category = "Order Management"
+        icon = "fa-solid fa-ticket"
+        column_list = [Coupon.code, Coupon.discount_type, Coupon.discount_value, Coupon.is_active]
+
+    # ==========================================
+    # 3. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ø®Ø§Ø²Ù† ÙˆØ§Ù„Ø£ØµÙ†Ø§Ù (Ø§Ù„Ù…ÙƒØ§Ù† Ø§Ù„Ø¬Ø¯ÙŠØ¯ Ù„Ù„Ø±ÙØ¹)
+    # ==========================================
+    class BulkUploadAdmin(BaseView):
+        name = "Bulk Import (Ø±ÙØ¹ Ø¥ÙƒØ³ÙŠÙ„)"
+        icon = "fa-solid fa-file-import"
+        category = "Inventory"
+
+        @expose("/bulk-upload", methods=["GET"])
+        async def bulk_upload_page(self, request):
+            return await self.templates.TemplateResponse(request, "bulk_upload.html")
+
+        @expose("/download-template", methods=["GET"])
+        async def download_template(self, request):
+            file_stream = create_bulk_template()
+            return StreamingResponse(
+                file_stream,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": "attachment; filename=sharawy_template.xlsx"}
+            )
+
+        @expose("/process-upload", methods=["POST"])
+        async def process_upload(self, request):
+            form = await request.form()
+            file = form.get("excel_file")
+            if not file or not file.filename:
+                return RedirectResponse(url="/admin/bulk-upload?error=No file")
+            
+            content = await file.read()
+            async with AsyncSessionLocal() as db:
+                result = await BulkService.process_excel(content, db)
+                return await self.templates.TemplateResponse(request, "bulk_upload.html", {"result": result})
+
+    class ShortItemAdmin(ModelView, model=ShortItemNo):
+        name_plural = "Catalog (Ø§Ù„Ø£ØµÙ†Ø§Ù)"
+        category = "Inventory"
+        icon = "fa-solid fa-box-archive"
+        column_list = [ShortItemNo.id, ShortItemNo.short_item_no, ShortItemNo.ar_name, "Brand_Name"]
+        column_searchable_list = [ShortItemNo.short_item_no, ShortItemNo.ar_name]
+        form_columns = ['short_item_no', 'ar_name', 'en_name', 'header', 'sub_header', 'Brand_Name', 'categories', 'description']
+        inline_models = [ProductImage, Product] # Ø¥Ø¶Ø§ÙØ© ØµÙˆØ± ÙˆØ£Ø³Ø¹Ø§Ø± Ø§Ù„ØµÙ†Ù ÙÙŠ Ù†ÙØ³ Ø§Ù„Ø´Ø§Ø´Ø©
+        form_args = {"short_item_no": {"default": simple_generate_sku}}
+
+    class CategoryAdmin(ModelView, model=Category):
+        name_plural = "Categories (Ø§Ù„Ø£Ù‚Ø³Ø§Ù…)"
+        category = "Inventory"
+        icon = "fa-solid fa-layer-group"
+        column_list = [Category.id, Category.name, "slug", Category.level]
+        form_columns = ['name', 'slug', 'level', 'img_url', 'sub_categories', 'parent']
+
+    # ==========================================
+    # 4. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø£Ø³Ø¹Ø§Ø± ÙˆØ§Ù„ØªØ§Ø¬Ø§Øª
+    # ==========================================
+    class ProductAdmin(ModelView, model=Product):
+        name_plural = "Product"
+        category = "Sales & Pricing"
+        icon = "fa-solid fa-tags"
+        column_list = [Product.id, "short_item_no", "price", "discount_percentage", "final_price", "stock_quantity"]
+        column_searchable_list = ["short_item_no"]
+        
+        async def on_model_change(self, data, model, is_created, request):
+            model.calculate_final_price()
+
+    class TagAdmin(ModelView, model=Tag):
+        name_plural = "Product Tags"
+        category = "Sales & Pricing"
+        icon = "fa-solid fa-tag"
+        column_list=["name",'slug']
+        form_columns=["name",'slug']
+    # ==========================================
+    # 5. Ø§Ù„Ù„ÙˆØ¬Ø³ØªÙŠØ§Øª ÙˆØ§Ù„ØªØ³ÙˆÙŠÙ‚
+    # ==========================================
+    class TripAdmin(ModelView, model=Trip):
+        name_plural = "Shipping Trips"
+        category = "Logistics"
+        icon = "fa-solid fa-truck"
+        column_list = [Trip.id, Trip.transaction_type, Trip.status, Trip.shipping_fees]
+
+    class SupplierAdmin(ModelView, model=Supplier):
+        name_plural = "Suppliers"
+        category = "Logistics"
+        icon = "fa-solid fa-handshake"
+
+    class BannerAdmin(ModelView, model=Banner):
+        name_plural = "Banners"
+        category = "Marketing"
+        icon = "fa-solid fa-image"
+
+    # --- ØªØ³Ø¬ÙŠÙ„ Ø§Ù„ØµÙØ­Ø§Øª Ø¨Ø§Ù„ØªØ±ØªÙŠØ¨ ---
+    admin.add_view(UserAdmin)
+    admin.add_view(CustomerAdmin)
+    admin.add_view(OrderAdmin)
+    admin.add_view(OrderItemAdmin)
+    admin.add_view(CouponAdmin)
+    admin.add_view(BulkUploadAdmin)
+    admin.add_view(ShortItemAdmin)
+    admin.add_view(CategoryAdmin)
+    admin.add_view(ProductAdmin)
+    admin.add_view(TagAdmin)
+    admin.add_view(TripAdmin)
+    admin.add_view(SupplierAdmin)
+    admin.add_view(BannerAdmin)
+
+    return admin
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\Category_Admin.py ====
+
+from sqladmin import ModelView
+from models.Category import Category
+from app.db.session import SessionLocal
+
+class CategoryAdmin(ModelView, models=Category):
+    column_list = [Category.id, Category.name, Category.parent_id]    
+    form_columns = ['name', 'parent'] 
+    name = "Category"
+    label = "Ø§Ù„ÙØ¦Ø§Øª"
+    icon = "fa-solid fa-layer-group" # Ø£ÙŠÙ‚ÙˆÙ†Ø© Ø£Ù†Ø³Ø¨ Ù„Ù„ØªÙ‚Ø³ÙŠÙ…Ø§Øª
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\database.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\main.py ====
+
+# E:\Sharawy\PharmacyApp\ecommerce_backend\app\main.py
+
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from sqladmin.authentication import AuthenticationBackend
+from starlette.requests import Request
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+# 1. استيراد الراوترز (تأكد من استخدام النسخة التي في modules)
+from app.modules.orders import router as order_router 
+from app.routers.Auth import Auth 
+from app.routers.Banner import banner 
+from app.routers.Offers import offers
+from app.routers.Category import category
+from app.routers.Product import product
+from app.routers.Classifications import classifications
+from app.modules.shipping import router as shipping_router 
+from app.modules.identity import router as customer_point
+
+# 2. استيراد وظائف الـ Seeding التلقائي
+from app.modules.shipping.seed import auto_seed_shipping
+from app.modules.category.seed_categories import auto_seed_categories
+
+# 3. استيراد الإعدادات والأدمن
+from app.admin_portal import setup_admin
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- كود التشغيل (Startup) ---
+    print("---------------------------------------")
+    print("🚀 Sharawy Pharmacy System Starting...")
+    
+    # تنفيذ إضافة بيانات الشحن تلقائياً
+    try:
+        await auto_seed_shipping()
+        print("✅ Shipping Data Check: Done")
+    except Exception as e:
+        print(f"⚠️ Shipping Seed Warning: {e}")
+
+    # تنفيذ إضافة الأقسام تلقائياً
+    try:
+        await auto_seed_categories()
+        print("✅ Category Data Check: Done")
+    except Exception as e:
+        print(f"⚠️ Category Seed Warning: {e}")
+
+    print("✅ Web Server is Running")
+    print("---------------------------------------")
+    
+    yield
+    
+    # --- كود الإغلاق (Shutdown) ---
+    print("🛑 Sharawy System Shutting Down...")
+
+app = FastAPI(
+    title='Sharawy Pharmacy API',
+    lifespan=lifespan
+)
+
+# --- Middlewares ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(SessionMiddleware, secret_key="SHARAWY_SECRET_KEY_123")
+
+# --- Static Files ---
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# --- تسجيل الراوترز ---
+# تم حذف أي include_router قديم لـ Order لضمان عدم التكرار
+app.include_router(order_router.router) 
+app.include_router(Auth.router) 
+app.include_router(banner.router)
+app.include_router(category.router)
+app.include_router(product.router)
+app.include_router(offers.router)
+app.include_router(classifications.router)
+app.include_router(shipping_router.router) 
+app.include_router(customer_point.router) 
+
+# --- إعداد نظام حماية لوحة التحكم (Admin Auth) ---
+class AdminAuth(AuthenticationBackend):
+    async def login(self, request: Request) -> bool:
+        form = await request.form()
+        if form.get("username") == "admin" and form.get("password") == "sharawy123":
+            request.session.update({"token": "admin_access_granted"})
+            return True
+        return False
+
+    async def logout(self, request: Request) -> bool:
+        request.session.clear()
+        return True
+
+    async def authenticate(self, request: Request) -> bool:
+        return request.session.get("token") == "admin_access_granted"
+
+setup_admin(app, AdminAuth(secret_key="SHARAWY_SECRET_KEY_123"))
+
+@app.get('/')
+async def root():
+    return {'message': 'Sharawy Pharmacy API is running 🚀'}
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\reset_db.py ====
+
+import asyncio
+import sys
+import os
+
+# Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù…Ø³Ø§Ø± Ø§Ù„Ø­Ø§Ù„ÙŠ Ø¹Ø´Ø§Ù† Ù†Ù‚Ø¯Ø± Ù†Ø³ØªÙˆØ±Ø¯ Ø§Ù„Ù€ app
+sys.path.append(os.getcwd())
+
+from app.app.db.session import async_engine
+from app.db.base import Base
+# Ø¶Ø±ÙˆØ±ÙŠ Ø¬Ø¯Ø§Ù‹ Ù†Ø³ØªÙˆØ±Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª Ø¹Ø´Ø§Ù† Base ÙŠØ¹Ø±Ù Ø¥Ù† ÙÙŠÙ‡ Ø¬Ø¯Ø§ÙˆÙ„
+from app.modelss import product, user, order, discount 
+
+async def reset_database():
+    print("ðŸ—‘ï¸  Deleting old models...")
+    async with async_engine.begin() as conn:
+        # Ø­Ø°Ù ÙƒÙ„ Ø§Ù„Ø¬Ø¯Ø§ÙˆÙ„ (User, Product, etc.)
+        await conn.run_sync(Base.metadata.drop_all)
+    print("âœ… Old models deleted.")
+
+    print("ðŸ—ï¸  Creating new models...")
+    async with async_engine.begin() as conn:
+        # Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø¬Ø¯Ø§ÙˆÙ„ Ù…Ù† Ø¬Ø¯ÙŠØ¯ Ø¨Ù†Ø§Ø¡Ù‹ Ø¹Ù„Ù‰ ÙƒÙˆØ¯ Ø§Ù„Ù€ modelss
+        await conn.run_sync(Base.metadata.create_all)
+    
+    print("ðŸŽ‰ Database reset successfully! All columns are synced.")
+
+if __name__ == "__main__":
+    # ØªØ´ØºÙŠÙ„ Ø§Ù„Ø¯Ø§Ù„Ø© (ÙˆÙŠÙ†Ø¯ÙˆØ² Ø£Ø­ÙŠØ§Ù†Ø§Ù‹ Ø¨ÙŠØ­ØªØ§Ø¬ Loop Policy Ù…Ø¹ÙŠÙ†ØŒ Ø¨Ø³ Ø¯Ù‡ Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ)
+    if sys.platform == 'win32':
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    
+    asyncio.run(reset_database())
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\ShortItemNo.py ====
+
+import datetime
+import random
+import string
+import secrets
+from sqladmin import ModelView
+from models.Short_Item_No import ShortItemNo
+from sqlalchemy import select
+from models.Category import Category
+def generate_short_sku():
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(8))
+
+class ShortItemAdmin(ModelView, models=ShortItemNo):
+    # Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© Ø§Ù„ØªÙŠ ØªØ¸Ù‡Ø± ÙÙŠ Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ
+    column_list = [
+        ShortItemNo.id, 
+        ShortItemNo.short_item_no, 
+        ShortItemNo.ar_name, 
+        ShortItemNo.en_name
+    ]
+    
+    # Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© Ø§Ù„Ù‚Ø§Ø¨Ù„Ø© Ù„Ù„Ø¨Ø­Ø«
+    searchable_columns = [ShortItemNo.short_item_no, ShortItemNo.ar_name]
+    
+    # Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„ØªÙŠ ØªØ¸Ù‡Ø± ÙÙŠ Ù†Ù…ÙˆØ°Ø¬ Ø§Ù„Ø¥Ø¶Ø§ÙØ© ÙˆØ§Ù„ØªØ¹Ø¯ÙŠÙ„
+    form_columns = [
+        'short_item_no', 
+        'ar_name', 
+        'en_name', 
+        'description', 
+        'img_url1', 
+        'img_url2', 
+        'img_url3', 
+        'img_url4', 
+        'category_name'
+    ]
+
+    
+    form_args = {
+        'short_item_no': {
+            'default': generate_short_sku
+        },
+        
+    }
+
+    form_widget_args = {
+        'short_item_no': {
+            'readonly': True,
+            'style': 'background-color: #e9ecef; cursor: not-allowed; font-weight: bold; border: 1px solid #ced4da;'
+        },
+        'description': {
+            'rows': 3  # ØªØ­Ø³ÙŠÙ† Ù…Ø¸Ù‡Ø± Ø­Ù‚Ù„ Ø§Ù„ÙˆØµÙ
+        }
+    }
+
+    name = "Short Item"
+    label = "Ø§Ù„Ø£ØµÙ†Ø§Ù"
+    icon = "fa-solid fa-pills"
+
+
+    
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\__init__.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\core\config.py ====
+
+from pydantic_settings import BaseSettings
+from typing import Optional
+
+class Settings(BaseSettings):
+    # Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ù…Ø´Ø±ÙˆØ¹ Ø§Ù„Ø¹Ø§Ù…Ø©
+    PROJECT_NAME: str = "Sharawy Pharmacy System"
+    VERSION: str = "1.0.0"
+    
+    # Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª - Ø³ÙŠØªÙ… Ø³Ø­Ø¨Ù‡Ø§ Ù…Ù† .env Ø£Ùˆ Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ
+    DATABASE_URL: str = "sqlite+aiosqlite:///./pharmacy.db"
+    
+    # Ø§Ù„Ø£Ù…Ù† ÙˆØ§Ù„ØªØ´ÙÙŠØ± - Ø­Ø°Ø§Ø±Ù Ù…Ù† ØªØ±Ùƒ Ø§Ù„Ù‚ÙŠÙ… Ø§Ù„Ø­Ø³Ø§Ø³Ø© Ù‡Ù†Ø§ ÙÙŠ Ø§Ù„Ø¥Ù†ØªØ§Ø¬
+    SECRET_KEY: str = "YOUR_SUPER_SECRET_KEY_DONT_SHARE" 
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # Ø£Ø³Ø¨ÙˆØ¹ ÙƒØ§Ù…Ù„
+
+    # Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø¬ÙˆØ¬Ù„
+    GOOGLE_CLIENT_ID: str = "862508946163-tc53fo7jqb5ckq5tq48po8lqpimp8dnv.apps.googleusercontent.com"
+
+    class Config:
+        # ØªØ±ØªÙŠØ¨ Ù‚Ø±Ø§Ø¡Ø© Ù…Ù„ÙØ§Øª Ø§Ù„Ø¨ÙŠØ¦Ø© (Ø§Ù„Ø£ÙˆÙ„ÙˆÙŠØ© Ù„Ù€ .env Ù„Ùˆ Ù…ÙˆØ¬ÙˆØ¯)
+        env_file = ".env"
+        case_sensitive = True
+
+settings = Settings()
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\core\security.py ====
+
+from datetime import datetime, timedelta
+from jose import jwt
+from typing import Optional
+from passlib.context import CryptContext
+
+# --- إعدادات التشفير القديمة بتاعتك (سيبها زي ما هي) ---
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+
+# --- 👇 الجزء الجديد اللي ناقص ومسبب الإيرور 👇 ---
+
+SECRET_KEY = "your-super-secret-key-sharawy-2026" # غيره بعدين لملف الـ .env
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # التوكن يعيش أسبوع
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\db\base.py ====
+
+# app/db/base.py
+from sqlalchemy.orm import declarative_base
+
+# 1. ØªØ¹Ø±ÙŠÙ Ø§Ù„Ù€ Base
+Base = declarative_base()
+
+# 2. Ø§Ø³ØªÙŠØ±Ø§Ø¯ ÙƒÙ„ Ø§Ù„Ø¬Ø¯Ø§ÙˆÙ„ Ù‡Ù†Ø§ (Import ALL models)
+# Ø¯Ù‡ Ø§Ù„Ù„ÙŠ Ø¨ÙŠØ®Ù„ÙŠ Alembic ÙŠØ´ÙˆÙÙ‡Ù… ÙˆÙ…Ø§ ÙŠÙ…Ø³Ø­Ù‡Ù…Ø´
+from app.models.Short_Item_No import ShortItemNo
+from app.models.Category import Category
+from app.models.product import Product
+from app.models.ProductImage import ProductImage # Ø§Ù„Ø¬Ø¯ÙŠØ¯
+from app.models.Tag import Tag # Ø§Ù„Ø¬Ø¯ÙŠØ¯
+from app.models.Sales import Sales
+from app.models.Purchase import Purchase
+from app.models.Warehouse import Warehouse
+from app.models.logistics import Trip
+from app.models.supplier import Supplier
+from app.models.Classification import Classification
+from app.models.Return_Sales import ReturnSales
+from app.models.Banner import Banner
+from app.modules.orders.models import *
+from app.modules.shipping.models import *
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\db\session.py ====
+
+# app/db/session.py
+import os
+from pathlib import Path
+from urllib.parse import quote_plus
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from dotenv import load_dotenv
+
+# 1. ØªØ­Ø¯ÙŠØ¯ Ù…Ø³Ø§Ø± Ø§Ù„Ù…Ø´Ø±ÙˆØ¹ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ Ø¯ÙŠÙ†Ø§Ù…ÙŠÙƒÙŠØ§Ù‹
+# Ø§Ù„Ù…Ù„Ù Ø§Ù„Ø­Ø§Ù„ÙŠ: ecommerce_backend/app/db/session.py
+# .parent -> app/db
+# .parent -> app
+# .parent -> ecommerce_backend (Ø¯Ù‡ Ø§Ù„Ù€ Root Ø§Ù„Ù„ÙŠ ÙÙŠÙ‡ Ù…Ù„Ù Ø§Ù„Ù€ .env)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# 2. ØªØ­Ù…ÙŠÙ„ Ù…Ù„Ù Ø§Ù„Ø¨ÙŠØ¦Ø©
+ENV = os.getenv("ENV", "development")
+env_filename = f".env.{ENV}"
+dotenv_path = BASE_DIR / env_filename
+
+print(f"ðŸ” DEBUG: Loading environment variables from: {dotenv_path}")
+
+# ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ù„Ù
+load_dotenv(dotenv_path=dotenv_path)
+
+# 3. Ù‚Ø±Ø§Ø¡Ø© Ø§Ù„Ù…ØªØºÙŠØ±Ø§Øª
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_DRIVER = os.getenv("DB_DRIVER")
+
+# 4. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª (Data Validation) - Ø®Ø·ÙˆØ© Ù…Ù‡Ù…Ø© Ø¬Ø¯Ø§Ù‹
+if not DB_PASSWORD:
+    raise ValueError(f"âŒ Error: DB_PASSWORD is missing! Make sure {env_filename} exists and contains DB_PASSWORD.")
+
+if not DB_DRIVER:
+    raise ValueError(f"âŒ Error: DB_DRIVER is missing in {env_filename}")
+
+# Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„Ø¯Ø±Ø§ÙŠÙØ±
+if " " in DB_DRIVER:
+    encoded_driver = quote_plus(DB_DRIVER)
+else:
+    encoded_driver = DB_DRIVER
+
+# ØªØ´ÙÙŠØ± Ø§Ù„Ø¨Ø§Ø³ÙˆØ±Ø¯
+encoded_password = quote_plus(DB_PASSWORD)
+
+# 5. ØªÙƒÙˆÙŠÙ† Ø§Ù„Ø±Ø§Ø¨Ø·
+ASYNC_CONN_STR = (
+    f"mssql+aioodbc://{DB_USER}:{encoded_password}@"
+    f"{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    f"?driver={encoded_driver}&encrypt=no&TrustServerCertificate=yes"
+)
+
+# 6. Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ù…Ø­Ø±Ùƒ
+async_engine = create_async_engine(
+    ASYNC_CONN_STR,
+    echo=True, # Ø®Ù„ÙŠÙ‡Ø§ True Ø¹Ø´Ø§Ù† Ù†Ø´ÙˆÙ Ø§Ù„Ù€ SQL ÙÙŠ Ø§Ù„ØªÙŠØ±Ù…ÙŠÙ†Ø§Ù„
+    pool_size=20,
+    max_overflow=10,
+    pool_timeout=30,
+    pool_pre_ping=True
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\endpoints\bulk.py ====
+
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import get_db
+from app.services.excel_service import process_excel_import, generate_product_template
+from fastapi.responses import StreamingResponse
+
+router = APIRouter(prefix="/bulk", tags=["Bulk Actions"])
+
+@router.get("/template")
+async def get_excel_template():
+    """
+    ØªØ­Ù…ÙŠÙ„ Ù…Ù„Ù Ø§Ù„Ø¥ÙƒØ³Ù„ (Template) Ø§Ù„Ø°ÙŠ ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ ÙƒØ§ÙØ© Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©.
+    """
+    file_stream = generate_product_template()
+    return StreamingResponse(
+        file_stream,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=pharmacy_template.xlsx"}
+    )
+
+@router.post("/upload")
+async def upload_products_excel(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ø±ÙØ¹ Ù…Ù„Ù Ø§Ù„Ø¥ÙƒØ³Ù„ Ù„ØªÙˆØ²ÙŠØ¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø¹Ù„Ù‰ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¬Ø¯Ø§ÙˆÙ„ (Ø£ØµÙ†Ø§ÙØŒ Ù…Ø¨ÙŠØ¹Ø§ØªØŒ Ù…Ø®Ø²ÙˆÙ†ØŒ ØµÙˆØ±ØŒ ØªØ§Ø¬Ø§Øª).
+    """
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="ÙŠØ¬Ø¨ Ø±ÙØ¹ Ù…Ù„Ù Ø¥ÙƒØ³Ù„ ÙÙ‚Ø·.")
+
+    content = await file.read()
+    result = await process_excel_import(content, db)
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    return result
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\AfterSales.py ====
+
+import pandas as pd
+import io
+import time
+from sqladmin import Admin, ModelView, BaseView, expose
+from starlette.requests import Request
+from starlette.responses import Response
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import uuid
+from wtforms import StringField
+from sqlalchemy import Column, String, ForeignKey,Integer,Float,DateTime,INT,Text,Enum
+from sqlalchemy.orm import relationship
+from datetime import datetime
+
+
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Banner.py ====
+
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from app.db.base import Base
+
+class Banner(Base):
+    __tablename__ = "banners"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    image_url = Column(Text, nullable=False)
+    title = Column(String(100), nullable=True)
+    subtitle = Column(String(150), nullable=True)
+    
+    # âŒ Ø´ÙŠÙ„Ù†Ø§ Ø§Ù„Ù€ section Ø§Ù„Ù‚Ø¯ÙŠÙ… Ø§Ù„Ù„ÙŠ ÙƒØ§Ù† String
+    # section = Column(String(50), ... ) 
+
+    # âœ… Ø¶ÙÙ†Ø§ Ø§Ù„Ø±Ø¨Ø· Ø¨Ø§Ù„Ù€ Category
+    # Ø¯Ù‡ Ø§Ù„Ù„ÙŠ Ù‡ÙŠØ®Ù„ÙŠ Ø§Ù„Ù€ Dropdown ÙŠØ¸Ù‡Ø±
+    category_id = Column(Integer, ForeignKey('Category.id'), nullable=True)
+    category = relationship("Category") 
+
+    # Ø­Ù‚ÙˆÙ„ Ø¥Ø¶Ø§ÙÙŠØ©
+    target_screen = Column(String(50), nullable=True, default="Shop") 
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __str__(self):
+        # Ø¹Ø´Ø§Ù† Ù„Ù…Ø§ ÙŠØ¸Ù‡Ø± ÙÙŠ Ø§Ù„Ø£Ø¯Ù…Ù† ÙŠÙƒØªØ¨ Ø§Ø³Ù… Ø§Ù„Ø¨Ø§Ù†Ø± ÙˆØ§Ø³Ù… Ø§Ù„Ù‚Ø³Ù…
+        cat_name = self.category.name if self.category else "No Category"
+        return f"{self.title} - {cat_name}"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Category.py ====
+
+from sqlalchemy import Column, String, Integer, Text, ForeignKey, Table
+from sqlalchemy.orm import relationship, backref
+from app.db.base import Base 
+
+product_category_association = Table(
+    'product_category_link',
+    Base.metadata,
+    Column('short_item_id', Integer, ForeignKey('ShortItemNo.id'), primary_key=True),
+    Column('category_id', Integer, ForeignKey('Category.id'), primary_key=True)
+)
+
+class Category(Base):
+    __tablename__ = "Category"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    slug = Column(String(100), unique=True, index=True)
+    parent_id = Column(Integer, ForeignKey('Category.id'))
+    level = Column(Integer, default=0, index=True)
+    img_url = Column(Text, nullable=True)
+
+    items = relationship(
+        "ShortItemNo",
+        secondary=product_category_association,
+        back_populates="categories"
+    )
+
+    sub_categories = relationship(
+        "Category",
+        backref=backref('parent', remote_side=[id]),
+        cascade="all, delete"
+    )
+
+    def __str__(self):
+        return self.name
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Classification.py ====
+
+from sqlalchemy import Column, String, ForeignKey, Integer, Text
+from sqlalchemy.orm import relationship
+from app.db.base import Base 
+
+class Classification(Base):
+    __tablename__ = 'Classification'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Ø§Ù„Ø±Ø¨Ø· Ø¨Ø§Ù„ØµÙ†Ù
+    short_item_no = Column(String(20), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    
+    # ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¹Ù„Ø§Ù‚Ø©: Ø´Ù„Ù†Ø§ back_populates Ø¹Ø´Ø§Ù† Ø§Ù„Ù€ Error ÙŠØ®ØªÙÙŠ
+    item_details = relationship("ShortItemNo")
+
+    classification_type = Column(String(40), nullable=False) 
+    img_url = Column(Text, nullable=False)
+
+    def __repr__(self):
+        return f"<Classification(id={self.id}, type={self.classification_type})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Coupons.py ====
+
+from sqlalchemy import Column, Integer, Numeric, String, DateTime, ForeignKey, Enum, Boolean
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import enum
+from app.db.base import Base
+
+class Coupon(Base):
+    __tablename__ = 'coupons'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(20), unique=True, index=True, nullable=False) # (EID2026, SUMMER50)
+    
+    discount_type = Column(Enum("Percentage", "Fixed", name="coupon_type"))
+    discount_value = Column(Numeric(18, 2), nullable=False)
+    
+    min_order_amount = Column(Numeric(18, 2), default=0.00) # Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ Ù„Ù„Ø·Ù„Ø¨ Ø¹Ø´Ø§Ù† Ø§Ù„ÙƒÙˆØ¨ÙˆÙ† ÙŠØ´ØªØºÙ„
+    max_discount_limit = Column(Numeric(18, 2), nullable=True) # Ø£Ù‚ØµÙ‰ Ù…Ø¨Ù„Øº Ø®ØµÙ… (Ù„Ùˆ Ù†Ø³Ø¨Ø©)
+    
+    valid_from = Column(DateTime, default=datetime.utcnow)
+    valid_to = Column(DateTime, nullable=False) # ØªØ§Ø±ÙŠØ® Ø§Ù†ØªÙ‡Ø§Ø¡ Ø§Ù„ÙƒÙˆØ¨ÙˆÙ†
+    
+    usage_limit = Column(Integer, default=100) # Ø£Ù‚ØµÙ‰ Ø¹Ø¯Ø¯ Ù…Ø±Ø§Øª Ø§Ø³ØªØ®Ø¯Ø§Ù… Ù„Ù„ÙƒÙˆØ¨ÙˆÙ† ÙƒÙƒÙ„
+    used_count = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+
+    def is_valid(self, current_amount):
+        now = datetime.utcnow()
+        if not self.is_active or now < self.valid_from or now > self.valid_to:
+            return False
+        if current_amount < self.min_order_amount:
+            return False
+        if self.used_count >= self.usage_limit:
+            return False
+        return True
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\logistics.py ====
+
+from sqlalchemy import Column, String, ForeignKey, Integer, Float, DateTime, Text, Enum,Numeric
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.base import Base 
+
+class Trip(Base):
+    __tablename__ = "trip"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    short_item_id = Column(Integer, ForeignKey('ShortItemNo.id'))
+    purchase_id = Column(Integer, ForeignKey('Purchase.purchase_id'), nullable=True)
+    sales_id = Column(Integer, ForeignKey('Sales.id'), nullable=True)
+    
+    item_details = relationship("ShortItemNo")
+    purchase_order = relationship("Purchase", back_populates="trips")
+    sales_order = relationship("Sales", back_populates="trips")
+    
+    pickup_governorate = Column(String(50))
+    pickup_city = Column(String(50))
+    drop_governorate = Column(String(50))
+    drop_city = Column(String(50))  
+    
+    shipping_fees = Column(Numeric(18, 2), default=0.00)
+    transaction_type = Column(Enum("Sales", "Purchase", name="trans_type")) 
+    status = Column(String(20), default="Pending")
+    notes = Column(Text)
+
+    def __repr__(self):
+        return f"<Trip(id={self.id}, status={self.status}, type={self.transaction_type})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Product.py ====
+
+from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, String, Boolean, text
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.associationproxy import association_proxy
+from datetime import datetime
+from app.models.Tag import product_tags_association
+from app.db.base import Base 
+
+class Product(Base):
+    __tablename__ = 'Product'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String(150), unique=True, index=True, nullable=True) 
+
+    # 1. ØªØ£ÙƒØ¯ Ø£Ù† Ø§Ù„Ø¹Ù…ÙˆØ¯ Ø§Ù„Ù…Ø¹Ø±Ù Ù‡Ù†Ø§ ÙƒÙ€ ForeignKey Ù…Ø·Ø§Ø¨Ù‚ ØªÙ…Ø§Ù…Ø§Ù‹ Ù„Ù†ÙˆØ¹ Ø§Ù„Ø¹Ù…ÙˆØ¯ ÙÙŠ Ø¬Ø¯ÙˆÙ„ ShortItemNo
+    short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False, index=True)
+    
+    # 2. ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¹Ù„Ø§Ù‚Ø©: Ø¥Ø¶Ø§ÙØ© foreign_keys Ùˆ uselist=False Ø¥Ø°Ø§ ÙƒØ§Ù†Øª Ø¹Ù„Ø§Ù‚Ø© ÙˆØ§Ø­Ø¯ Ù„ÙˆØ§Ø­Ø¯
+    item_details = relationship(
+        'ShortItemNo', 
+        back_populates='products',
+        primaryjoin="Product.short_item_no == ShortItemNo.short_item_no",
+        foreign_keys=[short_item_no] # ØµØ±Ø§Ø­Ø©Ù‹ Ù†Ø®Ø¨Ø± SQLAlchemy Ø¨Ø§Ù„Ø¹Ù…ÙˆØ¯ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ù„Ù„Ø±Ø¨Ø·
+    )
+
+    stock_quantity = Column(Numeric(18, 2), default=0.00, server_default=text("0.00"), index=True) 
+
+    price = Column(Numeric(18, 2), default=0.00, server_default=text("0.00"), nullable=False)
+    discount_value = Column(Numeric(18, 2), default=0.00, server_default=text("0.00"), nullable=False)
+    discount_percentage = Column(Numeric(5, 2), default=0.00, server_default=text("0.00"), nullable=False)
+    final_price = Column(Numeric(18, 2), default=0.00, server_default=text("0.00"), index=True)
+
+    is_active = Column(Boolean, default=True, index=True)
+    is_featured = Column(Boolean, default=False)
+    is_new_arrival = Column(Boolean, default=False)
+    classification=Column(String(50))
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # === Proxies ===
+    name = association_proxy('item_details', 'ar_name')
+    en_name = association_proxy('item_details', 'en_name')
+    # ... Ø¨Ù‚ÙŠØ© Ø§Ù„Ù€ proxies
+
+    tags = relationship(
+        "Tag",
+        secondary=product_tags_association,
+        back_populates="products"
+    )
+
+    def calculate_final_price(self):
+        p = self.price or 0
+        dp = self.discount_percentage or 0
+        dv = self.discount_value or 0
+        
+        if dp > 0:
+            amt = p * (dp / 100)
+        else:
+            amt = dv
+        
+        self.final_price = max(0, p - amt)
+        return self.final_price
+
+    def __repr__(self):
+        return f"<Product(id={self.id}, sku={self.short_item_no})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\ProductImage.py ====
+
+from sqlalchemy import Column, Integer, Text, ForeignKey, Boolean, String
+from sqlalchemy.orm import relationship
+from app.db.base import Base
+
+class ProductImage(Base):
+    __tablename__ = "product_images"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # 1. ØªÙˆØ­ÙŠØ¯ Ø§Ù„Ø·ÙˆÙ„ Ù„ÙŠÙƒÙˆÙ† 40 Ù…Ø«Ù„ Ø§Ù„Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ
+    short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    
+    img_url = Column(Text, nullable=False)
+    is_main = Column(Boolean, default=False)
+    alt_text = Column(String(100), nullable=True)
+
+    # 2. Ø¥Ø¶Ø§ÙØ© foreign_keys Ù‡Ù†Ø§ Ø£ÙŠØ¶Ø§Ù‹ Ø¶Ø±ÙˆØ±ÙŠ Ø¬Ø¯Ø§Ù‹ Ù„Ù„Ù€ sqladmin
+    item = relationship(
+        "ShortItemNo", 
+        back_populates="additional_images",
+        primaryjoin="ProductImage.short_item_no == ShortItemNo.short_item_no",
+        foreign_keys=[short_item_no] # <--- Ø§Ù„Ø³Ø·Ø± Ø¯Ù‡ Ù‡Ùˆ Ø§Ù„Ù„ÙŠ Ù‡ÙŠØ´ÙŠÙ„ Ø§Ù„Ù€ KeyError
+    )
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Purchase.py ====
+
+from sqlalchemy import Column, String, ForeignKey, Integer, Numeric, DateTime
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import string
+import random
+from app.db.base import Base 
+
+def generate_auto_po():
+    now = datetime.now()
+    suffix = ''.join(random.choices(string.ascii_uppercase, k=2))
+    return f"PO-{now.strftime('%Y%m%d%H%M%S')}-{suffix}"
+
+class Purchase(Base):
+    __tablename__ = 'Purchase'
+    
+    purchase_id = Column(Integer, primary_key=True, autoincrement=True)
+    purchase_order_no = Column(String(50), unique=True, nullable=False, default=generate_auto_po) 
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    short_item_id = Column(Integer, ForeignKey('ShortItemNo.id'), nullable=False)
+    item_details = relationship('ShortItemNo', back_populates='purchases')
+    
+    supplier_id = Column(Integer, ForeignKey('Supplier.id'), nullable=True)
+    supplier_info = relationship("Supplier", back_populates="purchase_orders")
+
+    supplier_code = Column(String(20))
+    supplier_name = Column(String(100))
+    
+    quantity = Column(Numeric(18, 2), default=0.00)
+    um = Column(String(10))
+    unit_cost = Column(Numeric(18, 2), default=0.00)
+    unit_price = Column(Numeric(18, 2), default=0.00)
+    extended_cost = Column(Numeric(18, 2), default=0.00)
+    extended_price = Column(Numeric(18, 2), default=0.00)
+    
+    invoice_num = Column(String(30), nullable=True)
+    trips = relationship("Trip", back_populates="purchase_order")
+
+    def __repr__(self):
+        return f"<Purchase(id={self.purchase_id}, po={self.purchase_order_no})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\return_purchase.py ====
+
+from sqlalchemy import Column, String, ForeignKey, Integer, DateTime, Text, Numeric
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.base import Base 
+
+class ReturnPurchase(Base):
+    __tablename__ = 'return_purchase'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    # Ø±Ø¨Ø· Ø¨Ø£Ù…Ø± Ø§Ù„Ø´Ø±Ø§Ø¡ Ø§Ù„Ø£ØµÙ„ÙŠ (Ø¹Ø´Ø§Ù† Ù„Ùˆ Ù‡ØªØ±Ø¬Ø¹ Ù…Ù† ÙØ§ØªÙˆØ±Ø© Ù…Ø¹ÙŠÙ†Ø©)
+    purchase_id = Column(Integer, ForeignKey('Purchase.purchase_id'), nullable=True)
+    
+    # âœ… Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ Ù‡Ù†Ø§: Ø§Ù„Ø±Ø¨Ø· Ø¨Ø§Ù„Ù…Ù†ØªØ¬ Ø§Ù„ÙØ¹Ù„ÙŠ (Ø¥Ø¬Ø¨Ø§Ø±ÙŠ) Ø¨Ø¯Ù„ Ø§Ù„ØµÙ†Ù Ø§Ù„Ø¹Ø§Ù…
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False)
+    
+    # Ø¹Ù„Ø§Ù‚Ø© Ù„Ø¬Ù„Ø¨ ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ù…Ù†ØªØ¬ Ø§Ù„Ù…Ø±ØªØ¬Ø¹ Ø¨Ø³Ù‡ÙˆÙ„Ø© (Ø²ÙŠ Ø§Ù„Ø³Ø¹Ø± ÙˆØ§Ù„Ø§Ø³Ù…)
+    product_details = relationship('Product')
+    
+    supplier_code = Column(String(20))
+    supplier_name = Column(String(100))
+    
+    um = Column(String(3))
+    quantity = Column(Numeric(18, 2), default=0.00) # Ø§Ù„ÙƒÙ…ÙŠØ© Numeric Ù„Ù„Ø­ÙØ§Ø¸ Ø¹Ù„Ù‰ Ø§Ù„Ø¯Ù‚Ø©
+    unit_cost = Column(Numeric(18, 2), default=0.00)
+    extended_cost = Column(Numeric(18, 2), default=0.00)
+    
+    reason_for_return = Column(Text) # Ø³Ø¨Ø¨ Ø§Ù„Ù…Ø±ØªØ¬Ø¹ Ù„Ù„Ù…ÙˆØ±Ø¯
+    status = Column(String(20), default="Pending") # Ø­Ø§Ù„Ø© Ø§Ù„Ù…Ø±ØªØ¬Ø¹ (ØªÙ… Ø§Ù„Ø´Ø­Ù†ØŒ ØªÙ… Ø§Ù„Ø§Ø³ØªØ±Ø¯Ø§Ø¯)
+
+    def __repr__(self):
+        # âœ… ØªØ­Ø¯ÙŠØ« Ø¯Ø§Ù„Ø© Ø§Ù„Ø·Ø¨Ø§Ø¹Ø© Ø¹Ø´Ø§Ù† ØªØ¹Ø±Ø¶ Ø§Ù„Ù€ product_id Ø§Ù„Ø¬Ø¯ÙŠØ¯
+        return f"<ReturnPurchase(id={self.id}, product_id={self.product_id}, supplier={self.supplier_name}, qty={self.quantity})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Return_Sales.py ====
+
+from sqlalchemy import Column, String, ForeignKey, Integer, Numeric, DateTime, Text
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.base import Base 
+
+class ReturnSales(Base):
+    __tablename__ = 'return_sales'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    # Ø±Ø¨Ø· Ø¨Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ù…Ø¨ÙŠØ¹Ø§Øª (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)
+    sales_id = Column(Integer, ForeignKey('Sales.id'), nullable=True)
+    
+    # ðŸ‘‡ Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¬ÙˆÙ‡Ø±ÙŠ Ù‡Ù†Ø§: ØªØºÙŠÙŠØ± Ø§Ù„Ù†ÙˆØ¹ Ù„Ù€ String ÙˆØ§Ù„Ø±Ø¨Ø· Ø¨Ø§Ù„Ø¹Ù…ÙˆØ¯ Ø§Ù„Ù…Ø®ØµØµ
+    short_item_no = Column(String(20), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    
+    # ðŸ‘‡ ØªØ­Ø¯ÙŠØ¯ Ø§Ù„Ù€ primaryjoin Ù„Ø£Ù†Ù†Ø§ Ù„Ø§ Ù†Ø±Ø¨Ø· Ø¨Ø§Ù„Ù€ ID (Primary Key)
+    item_details = relationship(
+        'ShortItemNo',
+        primaryjoin="ReturnSales.short_item_no == ShortItemNo.short_item_no"
+    )
+
+    quantity = Column(Numeric(18, 2), default=0.00)
+    um = Column(String(10))
+    unit_price = Column(Numeric(18, 2), default=0.00)
+    extended_price = Column(Numeric(18, 2), default=0.00)
+    
+    # Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„
+    customer_code = Column(String(20))
+    customer_name = Column(String(100))
+    customer_governates = Column(String(50))
+    customer_city = Column(String(50))
+    customer_location = Column(Text)
+    phone_number = Column(String(20))
+    
+    # Ù…ØµØ§Ø±ÙŠÙ Ø§Ù„Ø´Ø­Ù† ÙˆØ§Ù„Ø³Ø¨Ø¨
+    shipping_fees = Column(Numeric(18, 2), default=0.00)
+    reason_for_return = Column(Text) 
+
+    def __repr__(self):
+        # ØªØ­Ø¯ÙŠØ« Ø§Ù„Ù€ repr Ù„ÙŠØ¹Ø±Ø¶ Ø§Ù„ÙƒÙˆØ¯ Ø§Ù„Ù†ØµÙŠ Ø¨Ø¯Ù„ Ø§Ù„Ù€ id
+        return f"<ReturnSales(id={self.id}, item_no={self.short_item_no}, qty={self.quantity})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Sales.py ====
+
+from sqlalchemy import Column, String, ForeignKey, Integer, Numeric, DateTime, Text
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.base import Base 
+
+class Sales(Base):
+    __tablename__ = 'Sales'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False)
+    product = relationship('Product', backref='sales_orders')
+    
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
+    customer_info = relationship("Customer", back_populates="sales_orders")
+
+    quantity = Column(Numeric(18, 2), default=0.00)
+    um = Column(String(10))
+    unit_price = Column(Numeric(18, 2), default=0.00)
+    extended_price = Column(Numeric(18, 2), default=0.00) 
+    
+    customer_code = Column(String(20))
+    customer_name = Column(String(100))
+    customer_governates = Column(String(50))
+    customer_city = Column(String(50))
+    customer_location = Column(Text)
+    phone_number = Column(String(20))
+    
+    shipping_fees = Column(Numeric(18, 2), default=0.00)
+    
+    trips = relationship("Trip", back_populates="sales_order")
+
+    def __repr__(self):
+        return f"<Sales(id={self.id}, product_id={self.product_id}, qty={self.quantity})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Short_Item_No.py ====
+
+from sqlalchemy import Column, String, Integer, Text
+from sqlalchemy.orm import relationship
+from app.db.base import Base 
+from app.models.Category import product_category_association
+
+class ShortItemNo(Base):
+    __tablename__ = "ShortItemNo"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    short_item_no = Column(String(40), unique=True, nullable=False, index=True)
+    
+    ar_name = Column(String(100), nullable=True)
+    en_name = Column(String(100), nullable=True)
+    description = Column(Text, nullable=True)
+    
+    Brand_Name = Column(String(100), nullable=True, index=True)
+
+    # âœ…âœ…âœ… Ø¶ÙŠÙ Ø§Ù„Ø³Ø·Ø±ÙŠÙ† Ø¯ÙˆÙ„ Ù‡Ù†Ø§ Ø¶Ø±ÙˆØ±ÙŠ âœ…âœ…âœ…
+    header = Column(String(100), nullable=True)      # Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ
+    sub_header = Column(String(100), nullable=True)  # Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„ÙØ±Ø¹ÙŠ
+
+    # Ø§Ù„Ø¹Ù„Ø§Ù‚Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© Ù…Ø¹ Ø¬Ø¯ÙˆÙ„ Ø§Ù„ØµÙˆØ±
+    additional_images = relationship("ProductImage", back_populates="item", cascade="all, delete-orphan")
+
+    products = relationship('Product', back_populates='item_details', cascade="all, delete-orphan")
+    purchases = relationship('Purchase', back_populates='item_details')
+
+    categories = relationship(
+        "Category",
+        secondary=product_category_association,
+        back_populates="items"
+    )
+
+    def __repr__(self):
+        return self.short_item_no
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\supplier.py ====
+
+from sqlalchemy import Column, String, Integer, Text, DateTime
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.base import Base 
+
+class Supplier(Base):
+    __tablename__ = 'Supplier'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    supplier_code = Column(String(20), unique=True, nullable=False)
+    supplier_name = Column(String(100), nullable=False)
+    contact_person = Column(String(100)) # Ø§Ù„Ø´Ø®Øµ Ø§Ù„Ù…Ø³Ø¤ÙˆÙ„
+    phone_number = Column(String(15))
+    email = Column(String(100))
+    address = Column(Text)
+    tax_number = Column(String(50)) # Ø§Ù„Ø±Ù‚Ù… Ø§Ù„Ø¶Ø±ÙŠØ¨ÙŠ (Ù…Ù‡Ù… Ù„Ù„Ø´Ø±ÙƒØ§Øª)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Ø§Ù„Ø¹Ù„Ø§Ù‚Ø© Ù…Ø¹ Ø§Ù„Ù…Ø´ØªØ±ÙŠØ§Øª: Ø§Ù„Ù…ÙˆØ±Ø¯ Ø§Ù„ÙˆØ§Ø­Ø¯ Ù„Ù‡ ÙÙˆØ§ØªÙŠØ± Ø´Ø±Ø§Ø¡ ÙƒØ«ÙŠØ±Ø©
+    purchase_orders = relationship("Purchase", back_populates="supplier_info")
+    def __repr__(self):
+        return f"<Supplier(name={self.supplier_name}, code={self.supplier_code})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Tag.py ====
+
+# app/models/Tag.py
+
+from sqlalchemy import Column, Integer, String, Table, ForeignKey
+from sqlalchemy.orm import relationship
+from app.db.base import Base
+
+# 1. Ø§Ù„Ø¬Ø¯ÙˆÙ„ Ø§Ù„ÙˆØ³ÙŠØ· (Association Table)
+# Ø¯Ù‡ Ø§Ù„Ù„ÙŠ Ø¨ÙŠØ®Ø²Ù† Ø¥Ù† Ø§Ù„Ù…Ù†ØªØ¬ Ø±Ù‚Ù… 5 ÙˆØ§Ø®Ø¯ Ø§Ù„ØªØ§Ø¬ Ø±Ù‚Ù… 1 ÙˆØ±Ù‚Ù… 3
+product_tags_association = Table(
+    'product_tags_link',
+    Base.metadata,
+    Column('product_id', Integer, ForeignKey('Product.id'), primary_key=True), # ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ø³Ù… Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø¹Ù†Ø¯Ùƒ Product
+    Column('tag_id', Integer, ForeignKey('tags.id'), primary_key=True)
+)
+
+# 2. ÙƒÙ„Ø§Ø³ Ø§Ù„ØªØ§Ø¬ Ù†ÙØ³Ù‡
+class Tag(Base):
+    __tablename__ = 'tags'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    name = Column(String(50), nullable=False, unique=True)  # Ø§Ù„Ø§Ø³Ù… (Ù…Ø«Ù„Ø§Ù‹: New Arrival)
+    slug = Column(String(50), nullable=False, unique=True)  # Ù„Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù… ÙÙŠ Ø§Ù„Ù„ÙŠÙ†Ùƒ (new-arrival)
+    color = Column(String(20), default="#000000")           # Ù„ÙˆÙ† Ø§Ù„Ø®Ù„ÙÙŠØ© (Ø§Ø®ØªÙŠØ§Ø±ÙŠ Ù„Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯)
+
+    # Ø§Ù„Ø¹Ù„Ø§Ù‚Ø© Ø§Ù„Ø¹ÙƒØ³ÙŠØ© Ø¹Ø´Ø§Ù† ØªÙ‚Ø¯Ø± ØªØ¬ÙŠØ¨ ÙƒÙ„ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø§Ù„Ù„ÙŠ ØªØ­Øª ØªØ§Ø¬ Ù…Ø¹ÙŠÙ†
+    products = relationship(
+        "Product",
+        secondary=product_tags_association,
+        back_populates="tags"
+    )
+
+    def __repr__(self):
+        return self.name
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\User.py ====
+
+import random
+import string
+import enum
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Enum, Numeric
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.db.base import Base
+
+# --- Ø¯Ø§Ù„Ø© Ù…Ø³Ø§Ø¹Ø¯Ø© Ù„Ø¥Ù†Ø´Ø§Ø¡ ÙƒÙˆØ¯ Ø¹Ù…ÙŠÙ„ ØªÙ„Ù‚Ø§Ø¦ÙŠ ---
+def generate_customer_code():
+    suffix = ''.join(random.choices(string.digits, k=6))
+    return f"CUST-{suffix}"
+
+# --- Ø£Ù†ÙˆØ§Ø¹ Ø£Ø¯ÙˆØ§Ø± Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† (Roles) ---
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"        # Ù…Ø¯ÙŠØ± Ø§Ù„Ù†Ø¸Ø§Ù… (ØµÙ„Ø§Ø­ÙŠØ§Øª ÙƒØ§Ù…Ù„Ø©)
+    STAFF = "staff"        # Ù…ÙˆØ¸Ù (ØªØ¬Ù‡ÙŠØ² Ø£ÙˆØ±Ø¯Ø±Ø§Øª ÙˆØ´Ø­Ù†)
+    CUSTOMER = "customer"  # Ø¹Ù…ÙŠÙ„ Ø¹Ø§Ø¯ÙŠ
+
+# --- Ø£Ù†ÙˆØ§Ø¹ Ø­Ø±ÙƒØ§Øª Ø§Ù„Ù†Ù‚Ø§Ø· ---
+class PointTransactionType(enum.Enum):
+    EARNED = "EARNED"         # ÙƒØ³Ø¨ Ù†Ù‚Ø§Ø· Ù…Ù† Ø´Ø±Ø§Ø¡
+    REDEEMED = "REDEEMED"     # ØµØ±Ù Ù†Ù‚Ø§Ø· ÙƒØ®ØµÙ…
+    REFUNDED = "REFUNDED"     # Ø§Ø³ØªØ±Ø¬Ø§Ø¹ Ù†Ù‚Ø§Ø· Ø¨Ø³Ø¨Ø¨ Ø¥Ù„ØºØ§Ø¡ Ø£ÙˆØ±Ø¯Ø±
+    BONUS = "BONUS"           # Ù†Ù‚Ø§Ø· Ù‡Ø¯ÙŠØ©
+
+# ==========================================
+# 1. Ø¬Ø¯Ø§ÙˆÙ„ Ø§Ù„Ù…ØµØ§Ø¯Ù‚Ø© ÙˆØ§Ù„Ù‡ÙˆÙŠØ© (Auth & Identity)
+# ==========================================
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # Ø§Ù„Ø¥ÙŠÙ…ÙŠÙ„ nullable=True Ù„ÙŠÙ‚Ø¨Ù„ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ Ø§Ù„Ø²ÙˆØ§Ø± Ø£Ùˆ Ø§Ù„ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø³Ø±ÙŠØ¹ Ø¨Ø§Ù„Ù‡Ø§ØªÙ Ù„Ø§Ø­Ù‚Ø§Ù‹
+    email = Column(String(100), unique=True, index=True, nullable=True)
+    
+    name = Column(String(100), nullable=True) 
+    avatar_url = Column(Text, nullable=True)  
+    password = Column(String(255), nullable=True) 
+    
+    # ðŸ‘‡ Ø§Ù„Ø­Ù‚Ù„ Ø§Ù„Ø¬Ø¯ÙŠØ¯ ÙˆØ§Ù„Ù…Ù‡Ù… Ø¬Ø¯Ø§Ù‹ Ù„Ù„Ø³ÙŠÙ†Ø§Ø±ÙŠÙˆ Ø¨ØªØ§Ø¹Ù†Ø§ ðŸ‘‡
+    role = Column(Enum(UserRole), default=UserRole.CUSTOMER, nullable=False, index=True)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # --- Ø§Ù„Ø¹Ù„Ø§Ù‚Ø§Øª ---
+    social_accounts = relationship("SocialAccount", back_populates="user", cascade="all, delete-orphan")
+    customer = relationship("Customer", back_populates="user", uselist=False, cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<User(email={self.email}, name={self.name}, role={self.role})>"
+
+
+class SocialAccount(Base):
+    __tablename__ = 'social_accounts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    
+    provider = Column(String(50), nullable=False) # Ù…Ø«Ù„ 'google'
+    provider_account_id = Column(String(255), nullable=False, index=True) 
+    
+    # --- Ø§Ù„Ø¹Ù„Ø§Ù‚Ø§Øª ---
+    user = relationship("User", back_populates="social_accounts")
+
+
+# ==========================================
+# 2. Ø¬Ø¯ÙˆÙ„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ (Profile & Loyalty Data) 
+# ==========================================
+class Customer(Base):
+    __tablename__ = 'customers' 
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False)
+    
+    customer_code = Column(String(20), unique=True, nullable=False, default=generate_customer_code, index=True)
+    phone = Column(String(20), nullable=True) 
+    
+    # --- Ù†Ø¸Ø§Ù… Ø§Ù„ÙˆÙ„Ø§Ø¡ ÙˆØ§Ù„Ø£Ù…Ø±Ø§Ø¶ Ø§Ù„Ù…Ø²Ù…Ù†Ø© ---
+    total_points = Column(Integer, default=0) 
+    is_chronic = Column(Boolean, default=False, index=True) 
+    chronic_vip_id = Column(String(50),  nullable=True) 
+    special_discount_percentage = Column(Numeric(5, 2), default=0.00) 
+    has_free_shipping = Column(Boolean, default=False) 
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # --- Ø§Ù„Ø¹Ù„Ø§Ù‚Ø§Øª ---
+    user = relationship("User", back_populates="customer")
+    addresses = relationship("Address", back_populates="customer", cascade="all, delete-orphan")
+    points_history = relationship("PointsTransaction", back_populates="customer", cascade="all, delete-orphan")
+    
+    # Ø¹Ù„Ø§Ù‚Ø§Øª Ø§Ù„Ø¹Ù…Ù„ÙŠØ§Øª Ø§Ù„ØªØ¬Ø§Ø±ÙŠØ© (ØªØ£ÙƒØ¯ Ù…Ù† Ù…Ø·Ø§Ø¨Ù‚Ø© Ø£Ø³Ù…Ø§Ø¡ Ø§Ù„ÙƒÙ„Ø§Ø³Ø§Øª ÙÙŠ Ù…Ù„ÙØ§ØªÙ‡Ø§)
+    orders = relationship("Order", back_populates="customer_info")
+    sales_orders = relationship("Sales", back_populates="customer_info")
+
+    def __repr__(self):
+        return f"<Customer(code={self.customer_code}, phone={self.phone})>"
+
+
+# ==========================================
+# 3. Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ø¹Ù†Ø§ÙˆÙŠÙ† (Addresses)
+# ==========================================
+class Address(Base):
+    __tablename__ = 'addresses'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
+    
+    governorate = Column(String(100), nullable=False)
+    city = Column(String(100), nullable=False)
+    details = Column(String(255), nullable=False)
+    phone = Column(String(20), nullable=False) 
+    is_default = Column(Boolean, default=False) 
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="addresses")
+
+
+# ==========================================
+# 4. Ø³Ø¬Ù„ Ø­Ø±ÙƒØ§Øª Ø§Ù„Ù†Ù‚Ø§Ø· (Points Ledger)
+# ==========================================
+class PointsTransaction(Base):
+    __tablename__ = 'points_transactions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
+    
+    points = Column(Integer, nullable=False) 
+    transaction_type = Column(Enum(PointTransactionType), nullable=False)
+    
+    order_id = Column(Integer, nullable=True) # Ø±Ø¨Ø· Ø§Ù„Ù†Ù‚Ø§Ø· Ø¨Ø§Ù„Ø£ÙˆØ±Ø¯Ø± Ø§Ù„Ø°ÙŠ ØªØ³Ø¨Ø¨ ÙÙŠÙ‡Ø§
+    status = Column(String(20), default="pending") 
+    is_confirmed = Column(Boolean, default=False) 
+    
+    description = Column(String(255), nullable=True) 
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="points_history")
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Warehouse.py ====
+
+from sqlalchemy import Column, Integer, Numeric, DateTime, ForeignKey, String, Enum
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import enum
+from app.db.base import Base
+
+class TransactionType(str, enum.Enum):
+    PURCHASE = "purchase"                  
+    SALE = "sale"                          
+    RETURN_FROM_CUSTOMER = "return_from_customer" 
+    RETURN_TO_SUPPLIER = "return_to_supplier"     
+    ADJUSTMENT = "adjustment"              
+
+class Warehouse(Base):
+    __tablename__ = 'warehouse'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False, index=True)
+    product = relationship('Product', backref='warehouse_records')
+
+    transaction_type = Column(Enum(TransactionType), nullable=False, index=True)
+    quantity = Column(Numeric(18, 2), nullable=False)
+    balance_after = Column(Numeric(18, 2), nullable=True)
+
+    unit_cost = Column(Numeric(18, 2), default=0.00)
+    unit_price = Column(Numeric(18, 2), default=0.00)
+    discount_value = Column(Numeric(18, 2), default=0.00)      # Ø®ØµÙ… Ù…Ø¨Ù„Øº Ø«Ø§Ø¨Øª (Ù…Ø«Ù„Ø§Ù‹ 50 Ø¬Ù†ÙŠÙ‡)
+    discount_percentage = Column(Numeric(5, 2), default=0.00)  # Ø®ØµÙ… Ù†Ø³Ø¨Ø© (Ù…Ø«Ù„Ø§Ù‹ 10%)
+    
+    final_price = Column(Numeric(18, 2), default=0.00, index=True) # Ø§Ù„Ø³Ø¹Ø± Ø¨Ø¹Ø¯ Ø§Ù„Ø®ØµÙ…
+    document_type = Column(String(50), index=True, nullable=True) 
+    document_id = Column(Integer, index=True, nullable=True)      
+    
+    notes = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_by = Column(Integer, nullable=True) 
+
+    def __repr__(self):
+        return f"<Warehouse(id={self.id}, type={self.transaction_type}, qty={self.quantity})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\__init__.py ====
+
+# app/models/__init__.py
+from app.db.base import Base
+
+# --- Ø§Ù„Ø£ØµÙ†Ø§Ù ÙˆØ§Ù„Ù…Ø®Ø²ÙˆÙ† ---
+from .Short_Item_No import ShortItemNo
+from .Category import Category
+from .Product import Product
+from .ProductImage import ProductImage
+from .Tag import Tag
+from .Warehouse import Warehouse, TransactionType 
+
+# --- Ù†Ø¸Ø§Ù… Ø§Ù„Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø¬Ø¯ÙŠØ¯ (E-commerce Core) ---
+# ØªØ£ÙƒØ¯ Ù…Ù† Ø¥Ù†Ø´Ø§Ø¡ Ù…Ù„ÙØ§Øª Ù„Ù‡Ø°Ù‡ Ø§Ù„ÙƒÙ„Ø§Ø³Ø§Øª ÙƒÙ…Ø§ ØµÙ…Ù…Ù†Ø§Ù‡Ø§ ÙÙŠ Ø§Ù„Ø®Ø·ÙˆØ© Ø§Ù„Ø³Ø§Ø¨Ù‚Ø©
+from .Coupons import Coupon
+
+# --- Ø§Ù„Ù…Ø¨ÙŠØ¹Ø§Øª ÙˆØ§Ù„Ù…Ø´ØªØ±ÙŠØ§Øª Ø§Ù„Ù‚Ø¯ÙŠÙ…Ø© (Ù„Ø£ØºØ±Ø§Ø¶ Ø§Ù„Ø£Ø±Ø´ÙØ© Ø£Ùˆ Ø§Ù„Ù†Ø¸Ø§Ù… Ø§Ù„Ø¯Ø§Ø®Ù„ÙŠ) ---
+from .Sales import Sales
+from .Purchase import Purchase
+from .Return_Sales import ReturnSales
+
+# --- Ø§Ù„Ù„ÙˆØ¬Ø³ØªÙŠØ§Øª ÙˆØ§Ù„Ø¹Ù…Ù„Ø§Ø¡ ---
+from .logistics import Trip
+from .supplier import Supplier
+
+# --- Ø§Ù„ØªØ³ÙˆÙŠÙ‚ ÙˆØ§Ù„Ø¹Ø±Ø¶ ---
+from .Classification import Classification
+from .Banner import Banner
+
+from .User import *
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\loyalty\models.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\loyalty\router.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\loyalty\schemas.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\loyalty\services.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\bulk_manager\router.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\bulk_manager\schemas.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\bulk_manager\services.py ====
+
+import pandas as pd
+import io
+import numpy as np
+import logging
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from slugify import slugify
+from app.models import ShortItemNo, Product, ProductImage, Category
+
+# Ø¥Ø¹Ø¯Ø§Ø¯ Ø§Ù„Ù„ÙˆØ¬Ø± Ù„Ù…ØªØ§Ø¨Ø¹Ø© Ø§Ù„Ø¹Ù…Ù„ÙŠØ§Øª
+logger = logging.getLogger("sqlalchemy.engine")
+
+class BulkService:
+    @staticmethod
+    async def get_or_create_category(db, cat_name: str):
+        """Ø¯Ø§Ù„Ø© Ø°ÙƒÙŠØ© Ù„Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù‚Ø³Ù… Ø£Ùˆ Ø¥Ù†Ø´Ø§Ø¦Ù‡ Ù„ØªØ¬Ù†Ø¨ Ø§Ù„Ù€ Duplicate Key"""
+        if not cat_name:
+            return None
+        
+        cat_name = cat_name.strip()
+        # 1. Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù‚Ø³Ù… Ø¨Ø§Ù„Ø§Ø³Ù…
+        stmt = select(Category).where(Category.name == cat_name)
+        result = await db.execute(stmt)
+        category = result.scalars().first()
+        
+        # 2. Ø¥Ø°Ø§ Ù„Ù… ÙŠÙˆØ¬Ø¯ØŒ Ù†Ù‚ÙˆÙ… Ø¨Ø¥Ù†Ø´Ø§Ø¦Ù‡ ÙÙˆØ±Ø§Ù‹ ÙˆØ¹Ù…Ù„ flush
+        if not category:
+            new_slug = slugify(cat_name)
+            category = Category(name=cat_name, slug=new_slug)
+            db.add(category)
+            try:
+                await db.flush() # ØªÙˆÙÙŠØ± Ø§Ù„Ù€ ID Ù„Ù„Ø±Ø¨Ø· ÙÙŠ Ù†ÙØ³ Ø§Ù„Ù„Ø­Ø¸Ø©
+            except Exception:
+                # ÙÙŠ Ø­Ø§Ù„Ø© Ø­Ø¯ÙˆØ« Ø³Ø¨Ø§Ù‚ (Race Condition) Ø§Ø¨Ø­Ø« Ø¹Ù†Ù‡ Ù…Ø±Ø© Ø£Ø®Ø±Ù‰
+                await db.rollback()
+                result = await db.execute(stmt)
+                category = result.scalars().first()
+                
+        return category
+
+    @staticmethod
+    async def process_excel(file_content: bytes, db):
+        # Ù‚Ø±Ø§Ø¡Ø© Ù…Ù„Ù Ø§Ù„Ø¥ÙƒØ³ÙŠÙ„
+        df = pd.read_excel(io.BytesIO(file_content))
+        # ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ù€ NaN Ù„Ù‚ÙŠÙ… None Ø¹Ø´Ø§Ù† Ø§Ù„Ù€ Database ØªÙÙ‡Ù…Ù‡Ø§
+        df = df.replace({np.nan: None})
+        
+        added_count = 0
+        updated_count = 0
+        errors = []
+
+        for index, row in df.iterrows():
+            sku = str(row.get('short_item_no', '')).strip()
+            if not sku or sku == 'None':
+                continue
+
+            try:
+                # Ø§Ø³ØªØ®Ø¯Ø§Ù… Transaction ÙØ±Ø¹ÙŠØ© Ù„ÙƒÙ„ Ø³Ø·Ø± (Savepoint)
+                # Ø¯ÙŠ Ø¨ØªØ¶Ù…Ù† Ø¥Ù† Ù„Ùˆ Ø³Ø·Ø± ÙØ´Ù„ØŒ Ø§Ù„Ø¨Ø§Ù‚ÙŠ ÙŠÙƒÙ…Ù„ Ø¹Ø§Ø¯ÙŠ
+                async with db.begin_nested():
+                    
+                    # --- 1. Ø¥Ø¯Ø§Ø±Ø© ShortItemNo ---
+                    # Ø¨Ù†Ø³ØªØ®Ø¯Ù… selectinload Ø¹Ø´Ø§Ù† Ù†Ø­Ù…Ù„ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„Ù…Ø±ØªØ¨Ø·Ø© ÙˆÙ†Ø¹Ø¯Ù„Ù‡Ø§
+                    stmt = select(ShortItemNo).where(ShortItemNo.short_item_no == sku).options(selectinload(ShortItemNo.categories))
+                    result = await db.execute(stmt)
+                    item = result.scalars().first()
+                    
+                    if not item:
+                        item = ShortItemNo(short_item_no=sku)
+                        db.add(item)
+                    
+                    item.ar_name = row.get('ar_name')
+                    item.en_name = row.get('en_name')
+                    item.description = row.get('description')
+
+                    # --- 2. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø£Ù‚Ø³Ø§Ù… (Ø­Ù„ Ù…Ø´ÙƒÙ„Ø© Ø§Ù„Ù€ Rollback) ---
+                    categories_input = row.get('categories')
+                    if categories_input:
+                        # ØªÙ‚Ø³ÙŠÙ… Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ù„Ùˆ ÙƒØ§Ù†Øª Ø£ÙƒØªØ± Ù…Ù† ÙˆØ§Ø­Ø¯ (Ù…Ø«Ù„Ø§Ù‹: Ø£Ø¯ÙˆÙŠØ©, Ø§Ù„Ø¹Ù†Ø§ÙŠØ© Ø¨Ø§Ù„Ø¨Ø´Ø±Ø©)
+                        cat_names = [c.strip() for c in str(categories_input).split(',') if c.strip()]
+                        
+                        # ØªØµÙÙŠØ± Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„Ø­Ø§Ù„ÙŠØ© ÙˆØ¥Ø¹Ø§Ø¯Ø© Ø±Ø¨Ø·Ù‡Ø§ (Ø£Ùˆ Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ù…ÙˆØ¬ÙˆØ¯)
+                        item.categories = [] 
+                        for name in cat_names:
+                            cat_obj = await BulkService.get_or_create_category(db, name)
+                            if cat_obj and cat_obj not in item.categories:
+                                item.categories.append(cat_obj)
+
+                    # --- 3. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ù†ØªØ¬ (Product) ÙˆØ§Ù„Ø£Ø³Ø¹Ø§Ø± ---
+                    p_stmt = select(Product).where(Product.short_item_no == sku)
+                    p_res = await db.execute(p_stmt)
+                    product = p_res.scalars().first()
+                    
+                    if not product:
+                        p_slug = slugify(str(item.en_name or item.ar_name or sku))
+                        product = Product(short_item_no=sku, slug=p_slug)
+                        db.add(product)
+                        added_count += 1
+                    else:
+                        updated_count += 1
+
+                    # ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø§Ù„ÙŠØ©
+                    product.price = float(row.get('price', 0))
+                    product.stock_quantity = int(row.get('stock_quantity', 0))
+                    # Ø¯Ø§Ù„Ø© Ø­Ø³Ø§Ø¨ Ø§Ù„Ø³Ø¹Ø± Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ (Ù„Ùˆ Ù…ÙˆØ¬ÙˆØ¯Ø© ÙÙŠ Ø§Ù„Ù€ Model Ø¹Ù†Ø¯Ùƒ)
+                    if hasattr(product, 'calculate_final_price'):
+                        product.calculate_final_price()
+
+                    # --- 4. Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„ØµÙˆØ± ---
+                    img_url = row.get('main_image_url')
+                    if img_url:
+                        img_stmt = select(ProductImage).where(
+                            ProductImage.short_item_no == sku, 
+                            ProductImage.is_main == True
+                        )
+                        img_res = await db.execute(img_stmt)
+                        img_obj = img_res.scalars().first()
+                        
+                        if img_obj:
+                            img_obj.img_url = img_url
+                        else:
+                            db.add(ProductImage(short_item_no=sku, img_url=img_url, is_main=True))
+
+                # Ø¹Ù…Ù„ Flush Ø¨Ø¹Ø¯ ÙƒÙ„ Ø³Ø·Ø± Ù†Ø§Ø¬Ø­ Ù„ØªØ«Ø¨ÙŠØª Ø§Ù„Ù€ Savepoint
+                await db.flush()
+
+            except Exception as e:
+                error_msg = f"Ø®Ø·Ø£ ÙÙŠ Ø§Ù„Ø³Ø·Ø± {index + 2} (SKU: {sku}): {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+                # Ø§Ù„Ø³Ø·Ø± Ø¯Ù‡ Ù‡ÙŠÙØ´Ù„ Ù„ÙˆØ­Ø¯Ù‡ ÙˆØ§Ù„Ù€ begin_nested Ù‡ØªØ¹Ù…Ù„Ù‡ Rollback 
+                # Ù„ÙƒÙ† Ø§Ù„Ø¨Ø±Ù†Ø§Ù…Ø¬ Ù‡ÙŠÙƒÙ…Ù„ Ù„Ù„Ø³Ø·Ø± Ø§Ù„Ù„ÙŠ Ø¨Ø¹Ø¯Ù‡
+
+        # Ø­ÙØ¸ ÙƒÙ„ Ø§Ù„ØªØ¹Ø¯ÙŠÙ„Ø§Øª Ø§Ù„Ù†Ø§Ø¬Ø­Ø© ÙÙŠ Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+        await db.commit()
+        
+        return {
+            "status": "completed",
+            "added": added_count,
+            "updated": updated_count,
+            "errors": errors
+        }
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\bulk_manager\template_factory.py ====
+
+import pandas as pd
+import io
+
+def create_bulk_template():
+    """
+    ØªÙˆÙ„ÙŠØ¯ Ù…Ù„Ù Ø¥ÙƒØ³ÙŠÙ„ (Template) ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ ÙƒØ§ÙØ© Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© Ø§Ù„Ù„Ø§Ø²Ù…Ø© Ù„Ø±ÙØ¹ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª 
+    Ø¨Ø´ÙƒÙ„ Ø¬Ù…Ø§Ø¹ÙŠ Ù„ØµÙŠØ¯Ù„ÙŠØ© Ø´Ø¹Ø±Ø§ÙˆÙŠØŒ Ù…Ø¹ Ø¯Ø¹Ù… Ø§Ù„ÙØ¦Ø§Øª ÙˆØ§Ù„ØµÙˆØ± ÙˆØ§Ù„ØªØ§Ø¬Ø§Øª Ø§Ù„Ù…ØªØ¹Ø¯Ø¯Ø©.
+    """
+    # Ø§Ù„Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„ÙƒØ§Ù…Ù„Ø© Ù„Ù„Ø£Ø¹Ù…Ø¯Ø© Ø¨Ù†Ø§Ø¡Ù‹ Ø¹Ù„Ù‰ Ù…Ù†Ø·Ù‚ Ø§Ù„Ù€ Database Ø§Ù„Ø­Ø§Ù„ÙŠ
+    columns = [
+        "short_item_no",      # ÙƒÙˆØ¯ Ø§Ù„ØµÙ†Ù Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ (Unique SKU)
+        "ar_name",            # Ø§Ù„Ø§Ø³Ù… Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠ
+        "en_name",            # Ø§Ù„Ø§Ø³Ù… Ø¨Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠ
+        "brand_name",         # Ø§Ù„Ù…Ø§Ø±ÙƒØ© (Brand)
+        "categories",         # Ø§Ù„ÙØ¦Ø§Øª (Ù…ÙØµÙˆÙ„Ø© Ø¨ÙØ§ØµÙ„Ø© ,) Ù…Ø«Ù„: Ø£Ø¯ÙˆÙŠØ©, Ù…Ø³ÙƒÙ†Ø§Øª
+        "description",        # Ø§Ù„ÙˆØµÙ Ø§Ù„ÙƒØ§Ù…Ù„ Ù„Ù„Ù…Ù†ØªØ¬
+        "header",             # Ù†Øµ Ù…Ù…ÙŠØ² (Ù…Ø«Ø§Ù„: Ø§Ù„Ø£ÙƒØ«Ø± Ù…Ø¨ÙŠØ¹Ø§Ù‹)
+        "sub_header",         # Ù†Øµ ÙØ±Ø¹ÙŠ (Ù…Ø«Ø§Ù„: Ø®ØµÙ… Ù„ÙØªØ±Ø© Ù…Ø­Ø¯ÙˆØ¯Ø©)
+        "price",              # Ø§Ù„Ø³Ø¹Ø± Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ
+        "discount_percentage",# Ù†Ø³Ø¨Ø© Ø§Ù„Ø®ØµÙ… (Ù…Ø«Ù„Ø§Ù‹ 10)
+        "discount_value",     # Ù‚ÙŠÙ…Ø© Ø§Ù„Ø®ØµÙ… Ø§Ù„Ù…Ø¨Ø§Ø´Ø±Ø© (Ø¥Ù† ÙˆØ¬Ø¯Øª)
+        "stock_quantity",     # Ø§Ù„ÙƒÙ…ÙŠØ© Ø§Ù„Ù…ØªØ§Ø­Ø© ÙÙŠ Ø§Ù„Ù…Ø®Ø²Ù†
+        "main_image_url",     # Ø±Ø§Ø¨Ø· Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©
+        "extra_images",       # Ø±ÙˆØ§Ø¨Ø· Ø§Ù„ØµÙˆØ± Ø§Ù„Ø¥Ø¶Ø§ÙÙŠØ© (Ù…ÙØµÙˆÙ„Ø© Ø¨ÙØ§ØµÙ„Ø© ,)
+        "tags",               # Ø§Ù„ØªØ§Ø¬Ø§Øª Ù„Ù„Ø¨Ø­Ø« (Ù…ÙØµÙˆÙ„Ø© Ø¨ÙØ§ØµÙ„Ø© ,)
+        "is_featured"         # Ù‡Ù„ ÙŠØ¸Ù‡Ø± ÙÙŠ Ø§Ù„Ù…Ù…ÙŠØ²ØŸ (1 Ù„Ù„Ù‚Ø¨ÙˆÙ„ØŒ 0 Ù„Ù„Ø±ÙØ¶)
+    ]
+    
+    # ØµÙ Ø¨ÙŠØ§Ù†Ø§Øª ØªØ¬Ø±ÙŠØ¨ÙŠ (Sample) Ø¹Ø´Ø§Ù† Ø§Ù„Ù„ÙŠ Ø¨ÙŠØ¯Ø®Ù„ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ù…ÙŠØªÙ„Ø®Ø¨Ø·Ø´
+    sample_data = [{
+        "short_item_no": "SH-1001",
+        "ar_name": "Ø¨Ù†Ø¯ÙˆÙ„ Ø§ÙƒØ³ØªØ±Ø§ 20 Ù‚Ø±Øµ",
+        "en_name": "Panadol Extra 20 Tab",
+        "brand_name": "GSK",
+        "categories": "Ø£Ø¯ÙˆÙŠØ©, Ù…Ø³ÙƒÙ†Ø§Øª", 
+        "description": "ÙŠØ³ØªØ®Ø¯Ù… Ù„ØªØ®ÙÙŠÙ Ø§Ù„Ø¢Ù„Ø§Ù… Ø§Ù„Ù…ØªÙˆØ³Ø·Ø© ÙˆØ§Ù„Ø´Ø¯ÙŠØ¯Ø© Ù…Ø«Ù„ Ø§Ù„ØµØ¯Ø§Ø¹",
+        "header": "Ø§Ù„Ø£ÙƒØ«Ø± Ø·Ù„Ø¨Ø§Ù‹",
+        "sub_header": "Ù…ØªÙˆÙØ± Ø§Ù„Ø¢Ù†",
+        "price": 35.0,
+        "discount_percentage": 10,
+        "discount_value": 0,
+        "stock_quantity": 100,
+        "main_image_url": "https://example.com/main.jpg",
+        "extra_images": "img1.jpg, img2.jpg",
+        "tags": "ØµØ¯Ø§Ø¹, Ø¨Ø±Ø¯, Ø®Ø§ÙØ¶ Ø­Ø±Ø§Ø±Ø©",
+        "is_featured": 1
+    }]
+
+    df = pd.DataFrame(sample_data, columns=columns)
+    
+    output = io.BytesIO()
+    
+    # Ø§Ø³ØªØ®Ø¯Ø§Ù… xlsxwriter Ù„ØªÙ†Ø³ÙŠÙ‚ Ø§Ù„Ù…Ù„Ù Ù„ÙŠØ¸Ù‡Ø± Ø¨Ø´ÙƒÙ„ Ø§Ø­ØªØ±Ø§ÙÙŠ
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Products_Template')
+        
+        workbook  = writer.book
+        worksheet = writer.sheets['Products_Template']
+        
+        # ØªÙ†Ø³ÙŠÙ‚ Ø±Ø£Ø³ Ø§Ù„Ø¬Ø¯ÙˆÙ„ (Header)
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#D7E4BC', # Ù„ÙˆÙ† Ø£Ø®Ø¶Ø± Ù‡Ø§Ø¯Ø¦
+            'border': 1,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
+        
+        # ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„ØªÙ†Ø³ÙŠÙ‚ ÙˆØªÙˆØ³ÙŠØ¹ Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+            # Ø¶Ø¨Ø· Ø¹Ø±Ø¶ Ø§Ù„Ø¹Ù…ÙˆØ¯ Ø¨Ù†Ø§Ø¡Ù‹ Ø¹Ù„Ù‰ Ø·ÙˆÙ„ Ø§Ø³Ù… Ø§Ù„Ø¹Ù…ÙˆØ¯
+            worksheet.set_column(col_num, col_num, 20)
+
+    output.seek(0)
+    return output
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\bulk_manager\__init__.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\category\seed_categories.py ====
+
+from sqlalchemy import select
+from app.db.session import AsyncSessionLocal
+from app.models.Category import Category
+
+# Ø§Ù„Ø¯Ø§ØªØ§ Ø§Ù„Ù…Ø³ØªØ®Ø±Ø¬Ø© Ù…Ù† ØªØµÙ…ÙŠÙ…Ùƒ
+CATEGORIES_DATA = [
+    {"name": "Ù…Ù†ØªØ¬Ø§Øª Ø§Ù„Ø¬Ù…Ø§Ù„", "slug": "beauty-care", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuDlOPEJ6vZvtlo2VDnaRIH2zssk-2NJAXLtjU8E5R-kbJ7f_bYhbcI3SXdJQu607j5cg509z7ZVGip6VEi5tUIUSruhZ3s0nwUi4eyIhLF0_sWKhv5tpYn0NZ2hbVRxbltgBOkYjKflZxOeLim57Ox2Qm-8f2D1LHJKsHVl0fF0c9GAWf3Mi5N0jk-NeG99D8ObTD1MPgfeaYcdoF6n_IUvX9eLpwjHKjot8SRraLRAYCSlDI1lSKr7_5sErLPyiK0qtUFAeNfZiw"},
+    {"name": "Ø§Ù„ÙÙŠØªØ§Ù…ÙŠÙ†Ø§Øª ÙˆØ§Ù„Ù…ÙƒÙ…Ù„Ø§Øª Ø§Ù„ØºØ°Ø§Ø¦ÙŠØ©", "slug": "vitamins-and-supplements", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuAZFmCWDMgFZFc7N_mSVMjgjAGmzI6CRf5ho8qZbbYUjlyHDvVmtQ3UQEaFVJQxAEQ4wrK0QaQQYp-5V8N8ji-SS30jB3CCWICk8l-UCPfHlxBmw6SUZFg_Xgis3cl9QaCCNFeStQOz79pZhw4gffrqHTkZLO9Im15MdlUYUzt0cbjMttrOrE7BIv6tDEHAulXgLMIM5_Cxxljjv8HJOCH2EAPVvZ5BJ23z0sXanPASWeruWDo3NipuBmKSGiE9xjX92QEolPz9Nw"},
+    {"name": "Ø§Ù„ØµØ­Ø© Ø§Ù„Ø¬Ù†Ø³ÙŠØ©", "slug": "sexual-health", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuAV55TUb9LyZjJOHFI6Ego64Wbe8j5Idf2tQVyNB2-KnIC6pdH6lSdHakL7bTGZi4dE2NwTr7igoyjr9FjsBaBG5xmL7v-1dYN1NZw_dhTN3oZxTFECqV62PROUA6KMJ9Q3xSWbmtG9qkdXZ0rraUtqZygVKMxQ2TVySyHJkQaf_tjT8lHpYghNO4TjkbZr6sCCbfh_LbKHQtIMY4NaRREt3gxQCfwXJ4H_tfMbdt2tw-_Iltje39squlv9zY1z_oWnvSHFvecWUg"},
+    {"name": "Ø§Ù„Ø¹Ù†Ø§ÙŠØ© Ø¨Ø§Ù„Ø¨Ø´Ø±Ø©", "slug": "skincare", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuBzFCcF2yD5Z50nkoC0A9Gwt3TAyY2xJcUcq1wooLLVU44W8hkyJpsOpHbW-Mss3sNsvwoti1AlkbPuj88r7B3S8qF-NLP3zkx05W6xke3IXfMajn69PrHGRS1DHq_018x6vQYyG8WKd6LQESFuVPquRTDHVhsMF_bgY21uzzpEHHFqKCnWTmxq6k8rJ8557Li7SG3xLnIvmbrAt5mJJgIXtV8ZEkZbn99y658axNuOtL1Ed1XieAJjMwde8BNmvreeIWlZwS-XRg"},
+    {"name": "Ø§Ù„Ø£Ù… ÙˆØ§Ù„Ø·ÙÙ„", "slug": "mother-and-baby", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuA7RPDfho4pJU22TcVIxXrC_iNSM745MPIWO_htskIi0sIxXyenYFwLjl_KpOrj-vjkuRYDVodsezGkQPBAYm9zcm8sSXbl4ThwGw-4Cn-O0VUy7Wl-gvjKc7xtRTUZGx2HPEPPqjdSfQ-3DDcXHpOwkULxnZoG5FMr6vSFxiblFGiQYtiIQOHkVsPKXbx1Q-yx1tKuCRhzt2X4gpabNyHtArspOqZX3uZ8qRiFWMBaL3C2oLmfbqQ584zpbfbyUg5J0eES4WgY0A"},
+    {"name": "Ø§Ù„Ø¹Ù†Ø§ÙŠØ© Ø¨Ø§Ù„Ø´Ø¹Ø±", "slug": "hair-care", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuCaBbva6UzC43cnWH38sSECaY5x2S7bOtshsb-oTrfsx5VNGSkKG3Ks0G9MOKkhjYC-JTI0GDvbvLElcKsmaRZEY1-BlJIxHwkua67EFQS3FkmbT4ihQA6dygtPoKJTzYE5kd0nypw7-U8FRWy-OyJfE0sFEsQH3M-LDgsf0JUhKU6PeoU8e71kfL3io1AlJdSBiXQYLqmpDsGUSICwsbPOXjxX09WcKmP8XvjECAvwCjva2fZpBr5WInTTVchtMQzE7vERTWm3JA"},
+    {"name": "Ø§Ù„Ø¹Ù†Ø§ÙŠØ© Ø§Ù„ÙŠÙˆÙ…ÙŠØ©", "slug": "daily-care", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuCksCK4XXCEYEO3_GS7WHTniNEqGaftYAJAHsGXxvAFv1qCIdZkvLDJFr7GUN8d26ZKVBQahEpVVHASnGpVs5UmKoo5MwnTDMz-OBYFNCM9sH_zbf7xDqBwb_7jcIi1ELTezi7nZcSjKyMlbSayCla8Biw_AxQDSFCqtGemU2j14LgMsBs1FfQ57KVCZv7XurOvWnGC-0R9Kh-tt-pF-mQaL9_mNW_eYqFPTLFud7zeut-Q6gxhuZM2mhiLCIlimjwL0kLH90VLUQ"},
+    {"name": "ØµØ­Ø© Ø§Ù„Ø·ÙÙ„", "slug": "child-health", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuC4gWo_N2VvFeaQWZ9DBXY8_6MJWyaxzRi7z_r5dfeG8-dFS3BTWYKJXx6nT6W0vivLupQ32ssLpUCcKllq-o3e1SE527E3fzkO6yGLDt3OPdUCAwSY9bbnAJQxrSZtpfzNrImod1A75NGo5uPfRgedh8S4FnAjv_5js3o79bAZBrzFyjQl4l40pu4Pgf6FUhA9_5HCgnZUCor6GJPHznyLd2WDJs_YRqRE0X3LXmRDR1Y8k8hFMthkFO_dH5b-y0DrPPU1Iv887w"},
+    {"name": "Ø§Ù„Ø£Ø¯ÙˆÙŠØ©", "slug": "medicines", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuDNYqX8k8Uo7woGD53k7I2smOBKUir92lT4nYeUJ4qY4K0s98kjRk_fBBfpF1sjzspXyM5uE5BbiiNkWB67-kGX3Cv5ZGEKLvlhqawNHk_0E9Ur6vAuCBbqeTFhGpkw1jGL2bWrK3mfSPVYpClJSZ2vMvMNXqeUF_SqcP7d4IezjABnnihqUoK6wcV-Tim7rbZGmtnHDuuXu-be1XsZp4Dx5uoUh0RmVKlYeXMrdPJ2dE9H4CsIqQt5oX8v9l07VOS5Y0sxXVYrKw"},
+    {"name": "Ø¥Ù†Ù‚Ø§Øµ Ø§Ù„ÙˆØ²Ù† ÙˆØ§Ù„Ù„ÙŠØ§Ù‚Ø©", "slug": "weight-loss-fitness", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuA6WWl1DMHcz-FwEuVBtRACz9y4jjZkHBYy92WTSkRuBsZ1Bz2No5zxtfSEKmg8HqOmHVlbtyPi-QmsWApZGAOfdxuI3QKt9JGN44nd8cie3XPBuUMMh_A3qht1rjYqIT1AN_4OCDF4I1jjJbN79xXWbPml-TtCthvEPx2OxqaxEQrZ89-ykst4hnS7DzAfdYO8HrgD_eLz328Lmo62a2DBwh6x9tgNw8wxT6SXavVoei3YlGvWMRNSOgDELoge8q_uf7od0J5_Yg"},
+    {"name": "Ø§Ù„Ø¹Ù†Ø§ÙŠØ© Ø§Ù„Ø´Ø®ØµÙŠØ©", "slug": "personal-care", "img_url": "https://lh3.googleusercontent.com/aida-public/AB6AXuCIvkxr9DE-f3DkTfSxLcvMcRDRo_PeTQYe5NQCwtvUoBRoqHQUimbIvv96WPwcr8M04k9tWUZvJloADrA0PhxQHKGJk7dr87y9NE289GFi4_B48vLnnkVYAghclzJCtJdyx54_r9kCqHU7PrwhmJmocvz5gUPR9VVLh0tMBkAn_CYb7QpKxSTLqKEO_k3gwaPl8xHW4KG7Rkm16JFb4FEItgcdY2tbm33_xotihzGvTQSaGnEIt-vZoVxjkdhvzI9YsHdIuaBEoA"}
+]
+
+async def auto_seed_categories():
+    """
+    Ø¯Ø§Ù„Ø© Ù„Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© ÙˆØ¥Ø¶Ø§ÙØªÙ‡Ø§ Ø¥Ø°Ø§ Ù„Ù… ØªÙƒÙ† Ù…ÙˆØ¬ÙˆØ¯Ø©.
+    """
+    async with AsyncSessionLocal() as session:
+        added_count = 0
+        for cat_data in CATEGORIES_DATA:
+            # Ù†Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù‚Ø³Ù… Ø¨Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ù€ slug
+            query = select(Category).where(Category.slug == cat_data["slug"])
+            result = await session.execute(query)
+            existing_category = result.scalars().first()
+            
+            # Ù„Ùˆ Ø§Ù„Ù‚Ø³Ù… Ù…Ø´ Ù…ÙˆØ¬ÙˆØ¯ØŒ Ù†Ø¬Ù‡Ø²Ù‡ Ù„Ù„Ø¥Ø¶Ø§ÙØ©
+            if not existing_category:
+                new_category = Category(
+                    name=cat_data["name"],
+                    slug=cat_data["slug"],
+                    img_url=cat_data["img_url"],
+                    level=0,          # Ù‚Ø³Ù… Ø±Ø¦ÙŠØ³ÙŠ
+                    parent_id=None    # Ø¨Ø¯ÙˆÙ† Ø£Ø¨
+                )
+                session.add(new_category)
+                added_count += 1
+        
+        # Ù„Ùˆ ÙÙŠ Ø£Ù‚Ø³Ø§Ù… Ø¬Ø¯ÙŠØ¯Ø© Ø§ØªØ¶Ø§ÙØª Ù„Ù„Ù€ sessionØŒ Ù†Ø¹Ù…Ù„ Ø­ÙØ¸ (Commit)
+        if added_count > 0:
+            await session.commit()
+            print(f"âœ… Category Auto Seed: Successfully added {added_count} new categories.")
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\identity\router.py ====
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from sqlalchemy import func
+from typing import List, Optional
+from pydantic import BaseModel
+
+from app.db.session import get_db
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª Ù…Ù† Ù…Ø³Ø§Ø±Ø§ØªÙ‡Ø§ Ø§Ù„ØµØ­ÙŠØ­Ø©
+from app.models.user import Customer, Address
+from app.models.user import PointsTransaction
+
+from app.modules.identity.schemas import GoogleLoginSchema, CustomerResponse
+from app.modules.identity.services import IdentityService
+
+router = APIRouter()
+
+# ==========================================
+# 1. ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø¨Ø¬ÙˆØ¬Ù„
+# ==========================================
+@router.post("/auth/google", response_model=CustomerResponse)
+async def google_login(payload: GoogleLoginSchema, db: AsyncSession = Depends(get_db)):
+    
+    # 1. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ØµØ­Ø© Ø§Ù„ØªÙˆÙƒÙ† Ø¹Ø¨Ø± Ø®Ø¯Ù…Ø© Ø§Ù„Ù‡ÙˆÙŠØ©
+    google_user_data = await IdentityService.verify_google_token(payload.token)
+    
+    if not google_user_data:
+        raise HTTPException(status_code=400, detail="Invalid Google Token")
+    
+    # 2. Ø§Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£Ùˆ Ø¥Ù†Ø´Ø§Ø¦Ù‡ (ØªØ£ÙƒØ¯ Ø£Ù† Ø§Ù„Ø®Ø¯Ù…Ø© ØªØ±Ø¬Ø¹ ÙƒØ§Ø¦Ù† Customer)
+    customer, is_new = await IdentityService.get_or_create_customer(db, google_user_data)
+    
+    # 3. Ø¥Ø±Ø¬Ø§Ø¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª (ØªØ£ÙƒØ¯ Ù…Ù† Ù…Ø·Ø§Ø¨Ù‚Ø© Ø§Ù„Ù…Ø³Ù…ÙŠØ§Øª Ù…Ø¹ CustomerResponse Schema)
+    return {
+        "id": customer.user_id, # Ù…Ø¹Ø±Ù Ø§Ù„ÙŠÙˆØ²Ø± Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ Ù„Ù„Ø±Ø¨Ø· ÙÙŠ Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„
+        "name": customer.name, 
+        "email": customer.email,
+        "total_points": customer.total_points, # Ø§Ù„Ù‚ÙŠÙ…Ø© Ø§Ù„Ø­Ù‚ÙŠÙ‚ÙŠØ© Ù…Ù† Ø§Ù„Ø¯Ø§ØªØ§ Ø¨ÙŠØ² (Ù…Ø«Ù„ Ø§Ù„Ù€ 256)
+        "picture_url": customer.picture_url, 
+        "is_new_user": is_new
+    }
+
+# ==========================================
+# 2. Pydantic Schemas
+# ==========================================
+class AddressCreate(BaseModel):
+    user_id: int
+    governorate: str
+    city: str
+    details: str
+    phone: str
+
+# ==========================================
+# 3. Ø­ÙØ¸ ÙˆØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ
+# ==========================================
+@router.post("/customers/address")
+async def add_or_update_address(address_data: AddressCreate, db: AsyncSession = Depends(get_db)):
+    
+    # Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø¨Ø§Ø³ØªØ®Ø¯Ø§Ù… user_id
+    result = await db.execute(select(Customer).filter(Customer.user_id == address_data.user_id))
+    customer = result.scalars().first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Ø§Ù„Ø¹Ù…ÙŠÙ„ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯")
+
+    # Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø¹Ù†ÙˆØ§Ù† Ø§ÙØªØ±Ø§Ø¶ÙŠ Ù…ÙˆØ¬ÙˆØ¯ Ù…Ø³Ø¨Ù‚Ø§Ù‹
+    addr_result = await db.execute(
+        select(Address).filter(
+            Address.customer_id == customer.id,
+            Address.is_default == True
+        )
+    )
+    existing_address = addr_result.scalars().first()
+
+    if existing_address:
+        # ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø­Ø§Ù„ÙŠ
+        existing_address.governorate = address_data.governorate
+        existing_address.city = address_data.city
+        existing_address.details = address_data.details
+        existing_address.phone = address_data.phone
+    else:
+        # Ø¥Ù†Ø´Ø§Ø¡ Ø¹Ù†ÙˆØ§Ù† Ø¬Ø¯ÙŠØ¯
+        new_address = Address(
+            customer_id=customer.id,
+            governorate=address_data.governorate,
+            city=address_data.city,
+            details=address_data.details,
+            phone=address_data.phone,
+            is_default=True
+        )
+        db.add(new_address)
+
+    try:
+        await db.commit()
+        return {
+            "status": "success",
+            "message": "ØªÙ… Ø­ÙØ¸ Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø¨Ù†Ø¬Ø§Ø­", 
+            "address": address_data.dict()
+        }
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Ø®Ø·Ø£ ÙÙŠ Ø­ÙØ¸ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª")
+
+# ==========================================
+# 4. Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¨Ø±ÙˆÙØ§ÙŠÙ„ ÙƒØ§Ù…Ù„Ø© (Ù†Ù‚Ø§Ø· ÙØ¹Ù„ÙŠØ© + Ù…Ø¹Ù„Ù‚Ø© + Ø¹Ù†ÙˆØ§Ù†)
+# ==========================================
+@router.get("/auth/profile/{user_id}")
+async def get_customer_profile(user_id: int, db: AsyncSession = Depends(get_db)):
+    
+    # 1. Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©
+    # Ø§Ø³ØªØ®Ø¯Ù…Ù†Ø§ filter Ø¹Ù„Ù‰ user_id Ù„Ø¶Ù…Ø§Ù† Ø§Ù„Ø±Ø¨Ø· Ù…Ø¹ Ù†Ø¸Ø§Ù… Ø§Ù„Ù€ Auth
+    result = await db.execute(select(Customer).filter(Customer.user_id == user_id))
+    customer = result.scalars().first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„ ØºÙŠØ± Ù…ÙƒØªÙ…Ù„Ø©")
+
+    # 2. Ø­Ø³Ø§Ø¨ Ù…Ø¬Ù…ÙˆØ¹ Ø§Ù„Ù†Ù‚Ø§Ø· "Ø§Ù„Ù…Ø¹Ù„Ù‚Ø©" (Pending) Ù…Ù† Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ø¹Ù…Ù„ÙŠØ§Øª
+    pending_points_query = await db.execute(
+        select(func.sum(PointsTransaction.points)).where(
+            PointsTransaction.customer_id == customer.id,
+            PointsTransaction.status == "pending"
+        )
+    )
+    pending_points = pending_points_query.scalar() or 0
+
+    # 3. Ø¬Ù„Ø¨ Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ
+    addr_result = await db.execute(
+        select(Address).filter(Address.customer_id == customer.id, Address.is_default == True)
+    )
+    address = addr_result.scalars().first()
+
+    # 4. ØªØ¬Ù…ÙŠØ¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠØ©
+    return {
+        "id": customer.id,
+        "name": customer.name, # ÙŠØªÙ… Ø¬Ù„Ø¨Ù‡Ø§ Ù…Ù† Ø¹Ù„Ø§Ù‚Ø© Ø§Ù„ÙŠÙˆØ²Ø± ÙÙŠ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„ Ø£Ùˆ Ø§Ù„Ø®Ø¯Ù…Ø©
+        "email": customer.email,
+        "total_points": int(customer.total_points),  # Ø§Ù„ØªØ£ÙƒØ¯ Ø£Ù†Ù‡Ø§ Integer Ù„Ù„Ù€ StatsGrid
+        "pending_points": int(pending_points), 
+        "customer_code": customer.customer_code,
+        "picture_url": customer.picture_url,
+        "is_chronic": customer.is_chronic,
+        "default_address": {
+            "governorate": address.governorate,
+            "city": address.city,
+            "details": address.details,
+            "phone": address.phone
+        } if address else None
+    }
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\identity\schemas.py ====
+
+from pydantic import BaseModel
+from typing import Optional
+
+# 1. Ø§Ù„Ù„ÙŠ Ø¬Ø§ÙŠ Ù…Ù† Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„
+class GoogleLoginSchema(BaseModel):
+    token: str  # Ø§Ù„ØªÙˆÙƒÙ† Ø§Ù„Ø·ÙˆÙŠÙ„ Ø§Ù„Ù„ÙŠ Ø¬ÙˆØ¬Ù„ Ø¨ÙŠØ¯ÙŠÙ‡ Ù„Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„
+
+# app/modules/identity/schemas.py
+
+class CustomerResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    total_points: int  # ðŸ‘ˆ ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø§Ø³Ù… ÙƒØ¯Ø© Ù…Ø´ points_balance
+    picture_url: Optional[str] = None
+    is_new_user: bool
+
+    class Config:
+        from_attributes = True # Ø¹Ø´Ø§Ù† ÙŠÙ‚Ø±Ø£ Ù…Ù† Ø§Ù„Ù€ Database Model Ù…Ø¨Ø§Ø´Ø±Ø©
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\identity\services.py ====
+
+# E:\Sharawy\PharmacyApp\ecommerce_backend\app\services\identity_service.py
+
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from fastapi import HTTPException, status
+from app.core.config import settings
+
+class IdentityService:
+    
+    @staticmethod
+    async def verify_google_token(token: str):
+        """
+        Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ØµØ­Ø© Token Ø¬ÙˆØ¬Ù„ Ø¨Ø§Ø³ØªØ®Ø¯Ø§Ù… Client ID Ø§Ù„Ø®Ø§Øµ Ø¨Ø§Ù„ØªØ·Ø¨ÙŠÙ‚.
+        """
+        try:
+            # âœ… Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ù€ Client ID Ù…Ù† Ù…Ù„Ù Ø§Ù„Ø¥Ø¹Ø¯Ø§Ø¯Ø§Øª Ø§Ù„Ù…Ø±ÙƒØ²ÙŠ
+            id_info = id_token.verify_oauth2_token(
+                token, 
+                requests.Request(), 
+                settings.GOOGLE_CLIENT_ID
+            )
+            
+            # Ø§Ù„ØªØ£ÙƒØ¯ Ù…Ù† Ø£Ù† Ø§Ù„ØªÙˆÙƒÙ† ØµØ§Ø¯Ø± Ù…Ù† Ø¬Ù‡Ø© Ø¬ÙˆØ¬Ù„
+            if id_info['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+                raise ValueError('Wrong issuer.')
+
+            return id_info
+        except ValueError as e:
+            print(f"âŒ Google Token Verification Error: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"âŒ Unexpected Error during Token Verification: {str(e)}")
+            return None
+
+    @staticmethod
+    async def get_or_create_customer(db: AsyncSession, google_data: dict):
+        """
+        Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø£Ùˆ Ø¥Ù†Ø´Ø§Ø¦Ù‡:
+        - ÙŠØ¶Ù…Ù† Ø¥Ø±Ø¬Ø§Ø¹ ÙƒØ§Ø¦Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„ (Customer) Ù…Ø¹ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ÙŠÙˆØ²Ø± (User) Ù„Ø¶Ù…Ø§Ù† Ø¸Ù‡ÙˆØ± Ø§Ù„Ù†Ù‚Ø§Ø·.
+        """
+        # Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª Ø¯Ø§Ø®Ù„ Ø§Ù„Ø¯Ø§Ù„Ø© Ù„ØªØ¬Ù†Ø¨ Ø§Ù„Ù€ Circular Import
+        from app.models.user import User, Customer
+        
+        email = google_data.get('email')
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Email not provided by Google account"
+            )
+
+        # 1. Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙÙŠ Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ù€ User Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ
+        query = select(User).where(User.email == email)
+        result = await db.execute(query)
+        user = result.scalars().first()
+
+        is_new = False
+
+        if user:
+            # Ø¥Ø°Ø§ ÙƒØ§Ù† Ø§Ù„ÙŠÙˆØ²Ø± Ù…ÙˆØ¬ÙˆØ¯ØŒ Ù†Ø­Ø¯Ø« Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©
+            user.name = google_data.get('name', user.name)
+            user.avatar_url = google_data.get('picture', user.avatar_url)
+            
+            # Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø³Ø¬Ù„ Ø§Ù„Ø¹Ù…ÙŠÙ„ (Customer) Ø§Ù„Ù…Ø±ØªØ¨Ø· Ø¨Ù‡
+            customer_query = select(Customer).where(Customer.user_id == user.id)
+            customer_result = await db.execute(customer_query)
+            customer = customer_result.scalars().first()
+            
+            if not customer:
+                # Ù„Ùˆ Ø§Ù„ÙŠÙˆØ²Ø± Ù…ÙˆØ¬ÙˆØ¯ Ø¨Ø³ Ù…Ù„ÙˆØ´ Ø³Ø¬Ù„ Ø¹Ù…ÙŠÙ„ (Ø­Ø§Ù„Ø© Ù†Ø§Ø¯Ø±Ø©)
+                customer = Customer(user_id=user.id, total_points=50)
+                db.add(customer)
+        else:
+            # 2. Ø¥Ù†Ø´Ø§Ø¡ Ù…Ø³ØªØ®Ø¯Ù… Ø¬Ø¯ÙŠØ¯ ØªÙ…Ø§Ù…Ø§Ù‹
+            is_new = True
+            new_user = User(
+                email=email,
+                name=google_data.get('name'),
+                avatar_url=google_data.get('picture'),
+                is_active=True
+            )
+            db.add(new_user)
+            await db.flush() # Ø§Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ ID Ø§Ù„ÙŠÙˆØ²Ø± Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù…Ù‡ ÙÙŠ Ø±Ø¨Ø· Ø§Ù„Ø¹Ù…ÙŠÙ„
+
+            # Ø¥Ù†Ø´Ø§Ø¡ Ø³Ø¬Ù„ Ø§Ù„Ø¹Ù…ÙŠÙ„ ÙˆØ¥Ø¶Ø§ÙØ© Ù‡Ø¯ÙŠØ© Ø§Ù„ØªØ±Ø­ÙŠØ¨
+            customer = Customer(
+                user_id=new_user.id,
+                total_points=50  # Ù‡Ø¯ÙŠØ© ØªØ³Ø¬ÙŠÙ„ Ø£ÙˆÙ„ Ù…Ø±Ø©
+            )
+            db.add(customer)
+            user = new_user
+
+        try:
+            await db.commit()
+            
+            # ðŸŸ¢ Ø®Ø·ÙˆØ© Ø§Ù„Ø±Ø¨Ø· Ø§Ù„Ø³Ø­Ø±ÙŠØ© Ù„Ø¶Ù…Ø§Ù† ÙˆØµÙˆÙ„ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ù„Ù„Ù€ Router ðŸŸ¢
+            # Ø¨Ù†Ù†Ù‚Ù„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù€ User Ù„ÙƒØ§Ø¦Ù† Ø§Ù„Ù€ Customer Ø¹Ø´Ø§Ù† Ø§Ù„Ù€ Schema ØªÙ‚Ø±Ø£Ù‡Ø§ ØµØ­
+            customer.name = user.name
+            customer.email = user.email
+            customer.picture_url = user.avatar_url
+
+            return customer, is_new
+            
+        except Exception as e:
+            await db.rollback()
+            print(f"âŒ Database Error in Auth Service: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø­ÙØ¸ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…"
+            )
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\models.py ====
+
+# E:\Sharawy\PharmacyApp\ecommerce_backend\app\models\Order.py
+
+from sqlalchemy import Column, Integer, Numeric, String, DateTime, ForeignKey, Enum, Boolean, Text
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import enum
+from app.db.base import Base
+
+class OrderStatus(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    SHIPPED = "shipped"
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+
+class Order(Base):
+    __tablename__ = 'Orders'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_number = Column(String(50), unique=True, index=True) # ØªÙ… Ø§Ù„ØªÙˆØ³ÙŠØ¹ Ù„Ù€ 50
+    date = Column(DateTime, default=datetime.utcnow)
+    
+    customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
+    customer_info = relationship("Customer", back_populates="orders")
+
+    # Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø´Ø­Ù† (Snapshot)
+    shipping_first_name = Column(String(50))
+    shipping_last_name = Column(String(50))
+    shipping_governorate = Column(String(100))
+    shipping_city = Column(String(100))
+    shipping_details = Column(Text)
+    shipping_phone = Column(String(20))
+
+    # --- Ø§Ù„Ø­Ø³Ø§Ø¨Ø§Øª Ø§Ù„Ù…Ø§Ù„ÙŠØ© ---
+    total_raw_amount = Column(Numeric(18, 2), default=0.00) 
+    shipping_fees = Column(Numeric(18, 2), default=0.00)
+    coupon_discount = Column(Numeric(18, 2), default=0.00) 
+    
+    # ðŸ‘‡ Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø© Ø§Ù„Ø®Ø§ØµØ© Ø¨Ø®ØµÙ… Ø§Ù„Ù†Ù‚Ø§Ø· (Loyalty System) ðŸ‘‡
+    points_discount = Column(Numeric(18, 2), default=0.00) # Ø§Ù„Ù‚ÙŠÙ…Ø© Ø§Ù„Ù…Ø§Ù„ÙŠØ© Ø§Ù„Ù…Ø®ØµÙˆÙ…Ø© Ù…Ù‚Ø§Ø¨Ù„ Ø§Ù„Ù†Ù‚Ø§Ø·
+    used_points = Column(Integer, default=0)               # Ø¹Ø¯Ø¯ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„ØªÙŠ ØªÙ… Ø³Ø­Ø¨Ù‡Ø§ Ù…Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„
+    
+    total_final_amount = Column(Numeric(18, 2), default=0.00) 
+
+    status = Column(Enum(OrderStatus), default=OrderStatus.PENDING, index=True)
+    payment_method = Column(String(20), default="Cash")
+    is_paid = Column(Boolean, default=False)
+
+    items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
+    coupon_id = Column(Integer, ForeignKey('coupons.id'), nullable=True)
+
+
+class OrderItem(Base):
+    __tablename__ = 'OrderItems'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    order_id = Column(Integer, ForeignKey('Orders.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False)
+    
+    quantity = Column(Numeric(18, 2), nullable=False)
+    unit_price = Column(Numeric(18, 2), nullable=False) 
+    subtotal = Column(Numeric(18, 2), nullable=False)
+
+    order = relationship("Order", back_populates="items")
+    product = relationship("Product")
+
+
+
+
+
+
+
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\router.py ====
+
+# E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\router.py
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import List
+from datetime import datetime
+
+from app.db.session import get_db
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ø³ÙŠØ±ÙÙŠØ³ Ù…Ù† Ù†ÙØ³ Ø§Ù„Ù…Ø¬Ù„Ø¯ Ù„Ø¶Ù…Ø§Ù† Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ù†Ø³Ø®Ø© Ø§Ù„Ù…Ø¹Ø¯Ù„Ø©
+from .service import OrderService 
+from app.modules.orders.models import OrderStatus, Order, OrderItem 
+from app.models.product import Product 
+from .schemas import OrderCreate, OrderRead
+router = APIRouter(prefix="/orders", tags=["Orders Management"])
+
+# ==========================================
+# 1. Ø¥Ù†Ø´Ø§Ø¡ Ø·Ù„Ø¨ Ø¬Ø¯ÙŠØ¯ (POST /orders/create)
+# ==========================================
+@router.post("/create", status_code=status.HTTP_201_CREATED)
+async def create_new_order(payload: OrderCreate, db: AsyncSession = Depends(get_db)):
+    try:
+        # ØªØ­ÙˆÙŠÙ„ Ø¹Ù†Ø§ØµØ± Ø§Ù„Ø³Ù„Ø© Ø§Ù„Ù‚Ø§Ø¯Ù…Ø© Ù…Ù† Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„ Ø¥Ù„Ù‰ Ù‚Ø§Ø¦Ù…Ø© Ù‚ÙˆØ§Ù…ÙŠØ³ Ù„Ù„Ù…Ø¹Ø§Ù„Ø¬Ø©
+        cart_items_dict = [
+            {"product_id": item.product_id, "quantity": item.quantity} 
+            for item in payload.cart_items
+        ]
+        
+        shipping_data = {
+            "shipping_first_name": payload.shipping_first_name,
+            "shipping_last_name": payload.shipping_last_name,
+            "shipping_governorate": payload.shipping_governorate,
+            "shipping_city": payload.shipping_city,
+            "shipping_details": payload.shipping_details,
+            "shipping_phone": payload.shipping_phone
+        }
+
+        # ðŸŸ¢ Ø­Ø³Ø§Ø¨ Ù‚ÙŠÙ…Ø© Ø§Ù„Ø®ØµÙ… Ø§Ù„Ù…Ø§Ù„ÙŠ Ù„Ù„Ù†Ù‚Ø§Ø· (5 Ù‚Ø±ÙˆØ´ Ù„ÙƒÙ„ Ù†Ù‚Ø·Ø©)
+        # Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… ÙŠØ±Ø³Ù„ Ø¹Ø¯Ø¯ Ø§Ù„Ù†Ù‚Ø§Ø· (Ù…Ø«Ù„Ø§Ù‹ 100) ÙˆØ§Ù„Ø¨Ø§Ùƒ Ø¥Ù†Ø¯ ÙŠØ­Ø³Ø¨ Ù‚ÙŠÙ…ØªÙ‡Ø§ (5 Ø¬Ù†ÙŠÙ‡)
+        calculated_points_discount = float((payload.points_to_redeem or 0) * 0.05)
+
+        # ðŸŸ¢ Ø§Ø³ØªØ¯Ø¹Ø§Ø¡ Ø§Ù„Ø³ÙŠØ±ÙÙŠØ³ ÙˆØªÙ…Ø±ÙŠØ± Ø§Ù„Ù…Ø¹Ø§Ù…Ù„Ø§Øª Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø© ØµØ±Ø§Ø­Ø©Ù‹
+        new_order = await OrderService.create_order(
+            db=db,
+            customer_id=payload.customer_id,
+            cart_items=cart_items_dict,
+            shipping_data=shipping_data,
+            shipping_fees=payload.shipping_fees,
+            points_discount=calculated_points_discount,  # Ø§Ù„Ø®ØµÙ… Ø§Ù„Ù…Ø§Ù„ÙŠ
+            used_points=payload.points_to_redeem or 0,    # Ø¹Ø¯Ø¯ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…Ø®ØµÙˆÙ…Ø© Ù…Ù† Ø§Ù„Ø±ØµÙŠØ¯
+            coupon_discount=0.0                           # ÙŠÙ…ÙƒÙ† ØªØ·ÙˆÙŠØ±Ù‡Ø§ Ù„Ø§Ø­Ù‚Ø§Ù‹
+        )
+
+        return {
+            "status": "success", 
+            "order_number": new_order.order_number,
+            "order_id": new_order.id
+        }
+    except HTTPException as http_err:
+        # Ø¥Ø¹Ø§Ø¯Ø© Ø¥Ø±Ø³Ø§Ù„ Ø£Ø®Ø·Ø§Ø¡ Ø§Ù„Ù€ Validation Ø£Ùˆ Ø§Ù„Ù…Ø®Ø²Ù† ÙƒÙ…Ø§ Ù‡ÙŠ
+        raise http_err
+    except Exception as e:
+        print(f"âŒ Error during order creation: {str(e)}")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"ÙØ´Ù„ ÙÙŠ Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø·Ù„Ø¨: {str(e)}"
+        )
+
+
+# ==========================================
+# 2. Ù„ÙˆØ­Ø© ØªØ­ÙƒÙ… Ø§Ù„Ø£Ø¯Ù…Ù† (Dashboard - Ø¬Ù„Ø¨ ÙƒÙ„ Ø§Ù„Ø·Ù„Ø¨Ø§Øª)
+# ==========================================
+@router.get("/admin/all")
+async def get_all_orders_for_admin(db: AsyncSession = Depends(get_db)):
+    try:
+        query = (
+            select(Order)
+            .options(
+                selectinload(Order.items)
+                .selectinload(OrderItem.product)
+                .selectinload(Product.item_details)
+            )
+            .order_by(Order.date.desc())
+        )
+        
+        result = await db.execute(query)
+        orders = result.unique().scalars().all()
+
+        formatted_orders = []
+        for order in orders:
+            full_name = f"{order.shipping_first_name or ''} {order.shipping_last_name or ''}".strip()
+            full_address = f"{order.shipping_governorate or ''}, {order.shipping_city or ''}, {order.shipping_details or ''}".strip(", ")
+            
+            order_products = []
+            for item in order.items:
+                p_name = "Ù…Ù†ØªØ¬ ØºÙŠØ± Ù…Ø¹Ø±ÙˆÙ"
+                if item.product and item.product.item_details:
+                    p_name = item.product.item_details.ar_name or item.product.item_details.en_name
+
+                order_products.append({
+                    "id": item.id,
+                    "product_name": p_name,
+                    "quantity": float(item.quantity),
+                    "unit_price": float(item.unit_price),
+                    "subtotal": float(item.subtotal)
+                })
+            
+            formatted_orders.append({
+                "id": str(order.id), 
+                "order_number": order.order_number,
+                "total_final_amount": float(order.total_final_amount),
+                "status": order.status.value if hasattr(order.status, 'value') else order.status,
+                "customer_name": full_name or "Ø¹Ù…ÙŠÙ„ Ø²Ø§Ø¦Ø±",
+                "customer_phone": order.shipping_phone,
+                "shipping_address": full_address,
+                "date": order.date.isoformat() if order.date else None,
+                "payment_method": order.payment_method or "Cash",
+                "items_count": len(order.items),
+                "shipping_fees": float(order.shipping_fees or 0),
+                "coupon_discount": float(order.coupon_discount or 0),
+                "points_discount": float(order.points_discount or 0),
+                "items": order_products
+            })
+
+        return formatted_orders
+
+    except Exception as e:
+        print(f"âŒ Error fetching admin orders: {str(e)}")
+        raise HTTPException(status_code=500, detail="Ø­Ø¯Ø« Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª")
+
+
+# ==========================================
+# 3. ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„Ø·Ù„Ø¨ (Cycle Management)
+# ==========================================
+@router.patch("/{order_id}/status")
+async def update_order_status(order_id: int, status: OrderStatus, db: AsyncSession = Depends(get_db)):
+    try:
+        order = await OrderService.update_status(db, order_id, status)
+        return {"message": f"Order {order.order_number} status updated to {status}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ==========================================
+# 4. Ø¬Ù„Ø¨ ØªØ§Ø±ÙŠØ® Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø¹Ù…ÙŠÙ„
+# ==========================================
+@router.get("/my-orders/{customer_id}", response_model=List[OrderRead])
+async def get_customer_orders(customer_id: int, db: AsyncSession = Depends(get_db)):
+    try:
+        query = (
+            select(Order)
+            .where(Order.customer_id == customer_id)
+            .options(selectinload(Order.items))
+            .order_by(Order.date.desc())
+        )
+        result = await db.execute(query)
+        return result.unique().scalars().all()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø¬Ù„Ø¨ ØªØ§Ø±ÙŠØ® Ø·Ù„Ø¨Ø§ØªÙƒ")
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\schemas.py ====
+
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional
+from datetime import datetime
+from decimal import Decimal
+
+# --- 1. Schema Ù„Ø¹Ù†Ø§ØµØ± Ø§Ù„Ø·Ù„Ø¨ (OrderItem) ---
+class OrderItemBase(BaseModel):
+    product_id: str  # ðŸŸ¢ ØªÙ… Ø§Ù„ØªØºÙŠÙŠØ± Ù„Ù€ str Ù„Ù‚Ø¨ÙˆÙ„ Ø§Ù„Ù€ SKU Ù…Ø«Ù„ (SKU-120)
+    quantity: float
+
+class OrderItemCreate(OrderItemBase):
+    pass
+
+class OrderItemRead(OrderItemBase):
+    id: int
+    unit_price: Decimal
+    subtotal: Decimal
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- 2. Schema Ù„Ø¥Ù†Ø´Ø§Ø¡ Ø·Ù„Ø¨ Ø¬Ø¯ÙŠØ¯ (Order Create) ---
+class OrderCreate(BaseModel):
+    customer_id: Optional[int] = None
+    cart_items: List[OrderItemCreate]
+    coupon_code: Optional[str] = None
+    
+    # Ø¹Ø¯Ø¯ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„ØªÙŠ Ø³ÙŠØªÙ… Ø®ØµÙ…Ù‡Ø§ Ù…Ù† Ø±ØµÙŠØ¯ Ø§Ù„Ø¹Ù…ÙŠÙ„
+    points_to_redeem: Optional[int] = 0 
+    
+    shipping_fees: float = 0.0
+    
+    # Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø´Ø­Ù† Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©
+    shipping_first_name: str
+    shipping_last_name: str
+    shipping_governorate: str
+    shipping_city: str
+    shipping_details: str
+    shipping_phone: str
+    
+    payment_method: Optional[str] = "Cash"
+
+
+# --- 3. Schema Ù„Ù‚Ø±Ø§Ø¡Ø© Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø·Ù„Ø¨ (Order Read) ---
+class OrderRead(BaseModel):
+    id: int
+    order_number: str
+    date: datetime
+    status: str
+    
+    total_raw_amount: Decimal
+    shipping_fees: Decimal
+    coupon_discount: Decimal
+    
+    # Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ø®Ø§ØµØ© Ø¨Ù†Ø¸Ø§Ù… Ø§Ù„ÙˆÙ„Ø§Ø¡ (Loyalty)
+    points_discount: Decimal
+    used_points: int
+    
+    total_final_amount: Decimal
+    
+    # Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø´Ø­Ù† Ø§Ù„Ù…Ø®Ø²Ù†Ø©
+    shipping_first_name: Optional[str]
+    shipping_last_name: Optional[str]
+    shipping_city: Optional[str]
+    shipping_phone: Optional[str]
+    
+    # Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø¯Ø§Ø®Ù„ Ø§Ù„Ø·Ù„Ø¨
+    items: List[OrderItemRead]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- 4. Schema Ù„ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ø§Ù„Ø© ---
+class OrderStatusUpdate(BaseModel):
+    status: str
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\service.py ====
+
+# E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\service.py
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import HTTPException
+from datetime import datetime
+from decimal import Decimal
+
+from app.modules.orders.models import Order, OrderStatus, OrderItem
+from app.models.product import Product
+
+# ðŸ‘‡ Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø¬Ø¯Ø§ÙˆÙ„ Ø§Ù„Ø¹Ù…Ù„Ø§Ø¡ ÙˆØ­Ø±ÙƒØ§Øª Ø§Ù„Ù†Ù‚Ø§Ø· (ØªØ£ÙƒØ¯ Ù…Ù† Ù…Ø³Ø§Ø±Ù‡Ø§ Ø§Ù„ØµØ­ÙŠØ­ Ø¹Ù†Ø¯Ùƒ) ðŸ‘‡
+from app.models.user import Customer, PointsTransaction, PointTransactionType 
+
+class OrderService:
+    @staticmethod
+    async def create_order(
+        db: AsyncSession, 
+        customer_id: int | None, 
+        cart_items: list, 
+        shipping_data: dict,
+        shipping_fees: float,
+        points_discount: float,
+        used_points: int,
+        coupon_discount: float = 0.0
+    ):
+        total_raw = Decimal('0.0')
+        order_items_to_add = []
+        
+        for item in cart_items:
+            query = select(Product).where(Product.short_item_no == str(item['product_id']))
+            res = await db.execute(query)
+            product = res.scalars().first()
+            
+            if not product:
+                raise HTTPException(status_code=404, detail=f"Ø§Ù„ØµÙ†Ù Ø°Ùˆ Ø§Ù„Ø±Ù…Ø² {item['product_id']} ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯")
+            
+            qty_requested = Decimal(str(item['quantity']))
+            
+            if product.stock_quantity < qty_requested:
+                raise HTTPException(status_code=400, detail=f"Ø§Ù„ÙƒÙ…ÙŠØ© Ø§Ù„Ù…ØªØ§Ø­Ø© Ù…Ù† {product.short_item_no} Ù‡ÙŠ {product.stock_quantity} ÙÙ‚Ø·")
+
+            unit_price = Decimal(str(product.final_price))
+            subtotal = unit_price * qty_requested
+            total_raw += subtotal
+            
+            order_items_to_add.append(OrderItem(
+                product_id=product.id,
+                quantity=qty_requested,
+                unit_price=unit_price,
+                subtotal=subtotal
+            ))
+
+            product.stock_quantity -= qty_requested
+        
+        s_fees = Decimal(str(shipping_fees))
+        p_disc = Decimal(str(points_discount))
+        c_disc = Decimal(str(coupon_discount))
+        
+        total_final = (total_raw + s_fees) - (p_disc + c_disc)
+        
+        new_order = Order(
+            customer_id=customer_id,
+            order_number=f"ORD-{int(datetime.utcnow().timestamp())}",
+            total_raw_amount=total_raw,
+            shipping_fees=s_fees,
+            points_discount=p_disc,
+            used_points=used_points,
+            coupon_discount=c_disc,
+            total_final_amount=max(Decimal('0.0'), total_final),
+            status=OrderStatus.PENDING,
+            date=datetime.utcnow(),
+            **shipping_data
+        )
+        
+        new_order.items = order_items_to_add
+        db.add(new_order)
+
+        # ðŸ‘‡ [Ø§Ù„Ø¬Ø¯ÙŠØ¯] Ø³Ø­Ø¨ Ø§Ù„Ù†Ù‚Ø§Ø· Ù…Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø¹Ù†Ø¯ Ø§Ø³ØªØ®Ø¯Ø§Ù…Ù‡Ø§ ÙÙŠ Ø§Ù„Ø·Ù„Ø¨ ðŸ‘‡
+        if customer_id and used_points > 0:
+            customer = await db.get(Customer, customer_id)
+            if customer:
+                if customer.total_points < used_points:
+                    raise HTTPException(status_code=400, detail="Ø±ØµÙŠØ¯ Ø§Ù„Ù†Ù‚Ø§Ø· ØºÙŠØ± ÙƒØ§ÙÙ")
+                
+                # Ø®ØµÙ… Ø§Ù„Ù†Ù‚Ø§Ø· Ù…Ù† Ø±ØµÙŠØ¯ Ø§Ù„Ø¹Ù…ÙŠÙ„
+                customer.total_points -= used_points
+                
+                # ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø­Ø±ÙƒØ© ÙÙŠ Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ù€ History
+                pt_transaction = PointsTransaction(
+                    customer_id=customer_id,
+                    points=-used_points, # Ø¨Ø§Ù„Ø³Ø§Ù„Ø¨ Ø¹Ø´Ø§Ù† Ø¯ÙŠ Ù†Ù‚Ø· Ù…Ø³Ø­ÙˆØ¨Ø©
+                    transaction_type=PointTransactionType.REDEEMED,
+                    status="completed",
+                    is_confirmed=True,
+                    description=f"Ø®ØµÙ… Ù†Ù‚Ø§Ø· Ù„Ø§Ø³ØªØ®Ø¯Ø§Ù…Ù‡Ø§ ÙÙŠ Ø§Ù„Ø·Ù„Ø¨ {new_order.order_number}"
+                )
+                db.add(pt_transaction)
+        
+        try:
+            await db.commit()
+            await db.refresh(new_order)
+            return new_order
+        except Exception as e:
+            await db.rollback()
+            print(f"âŒ Database Error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Ø­Ø¯Ø« Ø®Ø·Ø£ ØªÙ‚Ù†ÙŠ Ø£Ø«Ù†Ø§Ø¡ Ø­ÙØ¸ Ø§Ù„Ø·Ù„Ø¨")
+
+    @staticmethod
+    async def update_status(db: AsyncSession, order_id: int, new_status: OrderStatus):
+        result = await db.execute(select(Order).where(Order.id == order_id))
+        order = result.scalars().first()
+        
+        if not order:
+            raise HTTPException(status_code=404, detail="Ø§Ù„Ø·Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯")
+
+        # Ù…Ù†Ø¹ ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø·Ù„Ø¨ Ù…Ù„ØºÙŠ Ø£Ùˆ Ù…Ø³Ù„Ù… Ù…Ø³Ø¨Ù‚Ø§Ù‹ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ Ø­Ø³Ø¨ Ø§Ù„Ù€ Business Ø¨ØªØ§Ø¹Ùƒ)
+        if order.status in [OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
+            raise HTTPException(status_code=400, detail="Ù„Ø§ ÙŠÙ…ÙƒÙ† ØªØºÙŠÙŠØ± Ø­Ø§Ù„Ø© Ø·Ù„Ø¨ Ù…Ù†ØªÙ‡ÙŠ Ø£Ùˆ Ù…Ù„ØºÙŠ")
+
+        now = datetime.utcnow()
+        if new_status == OrderStatus.PROCESSING:
+            order.confirmed_at = now
+        elif new_status == OrderStatus.SHIPPED:
+            order.shipped_at = now
+            
+        # ðŸ‘‡ [Ø§Ù„Ø¬Ø¯ÙŠØ¯] Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…ÙƒØªØ³Ø¨Ø© Ø¹Ù†Ø¯ Ø§Ù„ØªØ³Ù„ÙŠÙ… ðŸ‘‡
+        elif new_status == OrderStatus.DELIVERED:
+            order.delivered_at = now
+            order.is_paid = True 
+            
+            # Ø§ÙØªØ±Ø§Ø¶: Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø¨ÙŠÙƒØ³Ø¨ Ù†Ù‚Ø·Ø© ÙˆØ§Ø­Ø¯Ø© Ù„ÙƒÙ„ 10 Ø¬Ù†ÙŠÙ‡ Ø¨ÙŠØ¯ÙØ¹Ù‡Ø§ (ØªÙ‚Ø¯Ø± ØªØºÙŠØ± Ø§Ù„Ù…Ø¹Ø§Ø¯Ù„Ø© Ø¨Ø±Ø§Ø­ØªÙƒ)
+            earned_points = int(order.total_final_amount / 10) 
+            
+            if order.customer_id and earned_points > 0:
+                customer = await db.get(Customer, order.customer_id)
+                if customer:
+                    customer.total_points += earned_points
+                    
+                    pt_transaction = PointsTransaction(
+                        customer_id=order.customer_id,
+                        points=earned_points,
+                        transaction_type=PointTransactionType.EARNED,
+                        order_id=order.id,
+                        status="completed",
+                        is_confirmed=True,
+                        description=f"Ù†Ù‚Ø§Ø· Ù…ÙƒØªØ³Ø¨Ø© Ù…Ù† Ø§Ù„Ø·Ù„Ø¨ {order.order_number}"
+                    )
+                    db.add(pt_transaction)
+
+        # ðŸ‘‡ [Ø§Ù„Ø¬Ø¯ÙŠØ¯] Ø§Ø³ØªØ±Ø¬Ø§Ø¹ Ø§Ù„Ù†Ù‚Ø§Ø· Ù„Ù„Ø¹Ù…ÙŠÙ„ Ù„Ùˆ Ø§Ù„Ø·Ù„Ø¨ Ø§ØªÙ„ØºÙ‰ ÙˆÙƒØ§Ù† Ù…Ø³ØªØ®Ø¯Ù… Ù†Ù‚Ø§Ø· ðŸ‘‡
+        elif new_status == OrderStatus.CANCELLED:
+            if order.customer_id and order.used_points > 0:
+                customer = await db.get(Customer, order.customer_id)
+                if customer:
+                    customer.total_points += order.used_points
+                    
+                    pt_transaction = PointsTransaction(
+                        customer_id=order.customer_id,
+                        points=order.used_points,
+                        transaction_type=PointTransactionType.REFUNDED,
+                        order_id=order.id,
+                        status="completed",
+                        is_confirmed=True,
+                        description=f"Ø§Ø³ØªØ±Ø¬Ø§Ø¹ Ù†Ù‚Ø§Ø· Ø¨Ø³Ø¨Ø¨ Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ø·Ù„Ø¨ {order.order_number}"
+                    )
+                    db.add(pt_transaction)
+            
+            # Ù…Ù„Ø­ÙˆØ¸Ø©: Ù„Ùˆ Ø­Ø§Ø¨Ø¨ ØªØ±Ø¬Ø¹ Ø§Ù„Ù…Ø®Ø²ÙˆÙ† (Stock) ØªØ§Ù†ÙŠ Ù„Ù„Ù…Ù†ØªØ¬Ø§Øª Ù„Ù…Ø§ Ø§Ù„Ø·Ù„Ø¨ ÙŠØªÙ„ØºÙŠØŒ Ø¨ØªØ¹Ù…Ù„Ù‡Ø§ Ù‡Ù†Ø§ Ø¨Ø±Ø¶Ù‡.
+
+        order.status = new_status
+        
+        try:
+            await db.commit()
+            await db.refresh(order)
+            return order
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"ÙØ´Ù„ ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ø§Ù„Ø©: {str(e)}")
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\__init__.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\shipping\models.py ====
+
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Numeric
+from sqlalchemy.orm import relationship
+from app.db.base import Base
+
+class Governorate(Base):
+    __tablename__ = 'governorates'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name_ar = Column(String(50), nullable=False, unique=True)
+    name_en = Column(String(50), nullable=False, unique=True)
+    
+    # Ø§Ù„Ø³Ø¹Ø± Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ Ù„Ù„Ù…Ø­Ø§ÙØ¸Ø©
+    base_shipping_fee = Column(Numeric(10, 2), default=50.00)
+    is_active = Column(Boolean, default=True)
+
+    cities = relationship("City", back_populates="governorate", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return f"<Governorate(name={self.name_ar})>"
+
+class City(Base):
+    __tablename__ = 'cities'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    governorate_id = Column(Integer, ForeignKey('governorates.id'), nullable=False)
+    
+    name_ar = Column(String(50), nullable=False)
+    name_en = Column(String(50), nullable=False)
+    
+    # ØªØ³Ø¹ÙŠØ±Ø© Ø®Ø§ØµØ© Ù„Ù„Ù…Ø¯ÙŠÙ†Ø© (Ù„Ùˆ ÙƒØ§Ù†Øª Ù†Ø§Ø¦ÙŠØ© Ù…Ø«Ù„Ø§Ù‹)ØŒ Ù„Ùˆ Null Ù‡Ù†Ø³ØªØ®Ø¯Ù… Ø³Ø¹Ø± Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø©
+    custom_shipping_fee = Column(Numeric(10, 2), nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    governorate = relationship("Governorate", back_populates="cities")
+
+    def __repr__(self):
+        return f"<City(name={self.name_ar})>"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\shipping\router.py ====
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import List
+
+from app.db.session import get_db
+from .models import Governorate
+from .schemas import GovernorateRead
+
+router = APIRouter(prefix="/shipping", tags=["Shipping & Locations"])
+
+@router.get("/locations", response_model=List[GovernorateRead])
+async def get_all_locations(db: AsyncSession = Depends(get_db)):
+    """
+    Ø¬Ù„Ø¨ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø§Øª Ù…Ø¹ Ù…Ø¯Ù†Ù‡Ø§ Ù„Ø¹Ø±Ø¶Ù‡Ø§ ÙÙŠ ØªØ·Ø¨ÙŠÙ‚ Ø§Ù„Ù…ÙˆØ¨Ø§ÙŠÙ„ (Checkout).
+    """
+    try:
+        query = (
+            select(Governorate)
+            .where(Governorate.is_active == True)
+            .options(selectinload(Governorate.cities))
+        )
+        result = await db.execute(query)
+        return result.scalars().all()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Ø­Ø¯Ø« Ø®Ø·Ø£ ÙÙŠ Ø¬Ù„Ø¨ Ø§Ù„Ø£Ù…Ø§ÙƒÙ†")
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\shipping\schemas.py ====
+
+from pydantic import BaseModel
+from typing import List, Optional
+from decimal import Decimal
+
+class CityRead(BaseModel):
+    id: int
+    name_ar: str
+    name_en: str
+    custom_shipping_fee: Optional[Decimal] = None
+
+    class Config:
+        from_attributes = True
+
+class GovernorateRead(BaseModel):
+    id: int
+    name_ar: str
+    name_en: str
+    base_shipping_fee: Decimal
+    cities: List[CityRead] = []
+
+    class Config:
+        from_attributes = True
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\shipping\seed.py ====
+
+from sqlalchemy import select
+from app.db.session import AsyncSessionLocal
+from .models import Governorate, City
+
+# Ù‚Ø§Ø¦Ù…Ø© Ø´Ø§Ù…Ù„Ø© Ù„Ø£Ù‡Ù… Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø§Øª ÙˆØ§Ù„Ù…Ø¯Ù† (ØªÙ‚Ø¯Ø± ØªØ²ÙˆØ¯ Ø¹Ù„ÙŠÙ‡Ø§)
+INITIAL_LOCATIONS = [
+    {
+        "name_ar": "Ø§Ù„Ù‚Ø§Ù‡Ø±Ø©", "name_en": "Cairo", "base_fee": 45.00,
+        "cities": [
+            {"name_ar": "Ù…Ø¯ÙŠÙ†Ø© Ù†ØµØ±", "name_en": "Nasr City"},
+            {"name_ar": "Ø§Ù„Ù…Ø¹Ø§Ø¯ÙŠ", "name_en": "Maadi"},
+            {"name_ar": "Ø§Ù„ØªØ¬Ù…Ø¹ Ø§Ù„Ø®Ø§Ù…Ø³", "name_en": "New Cairo"}
+        ]
+    },
+    {
+        "name_ar": "Ø§Ù„Ø¬ÙŠØ²Ø©", "name_en": "Giza", "base_fee": 50.00,
+        "cities": [
+            {"name_ar": "Ø§Ù„Ø¯Ù‚ÙŠ", "name_en": "Dokki"},
+            {"name_ar": "6 Ø£ÙƒØªÙˆØ¨Ø±", "name_en": "6th of October", "custom_fee": 60.00}
+        ]
+    },
+    {
+        "name_ar": "Ø§Ù„Ø´Ø±Ù‚ÙŠØ©", "name_en": "Al Sharqia", "base_fee": 55.00,
+        "cities": [
+            {"name_ar": "Ø§Ù„Ø²Ù‚Ø§Ø²ÙŠÙ‚", "name_en": "Zagazig"},
+            {"name_ar": "Ø§Ù„Ø¹Ø§Ø´Ø± Ù…Ù† Ø±Ù…Ø¶Ø§Ù†", "name_en": "10th of Ramadan", "custom_fee": 65.00},
+            {"name_ar": "Ø¨Ù„Ø¨ÙŠØ³", "name_en": "Belbeis"}
+        ]
+    }
+]
+
+async def auto_seed_shipping(db=None):
+    """ÙˆØ¸ÙŠÙØ© Ù„Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ø¹Ù†Ø¯ ØªØ´ØºÙŠÙ„ Ø§Ù„Ø³ÙŠØ±ÙØ±"""
+    should_close = False
+    if db is None:
+        db = AsyncSessionLocal()
+        should_close = True
+    
+    try:
+        # ØªØ£ÙƒØ¯ Ù„Ùˆ ÙÙŠÙ‡ Ø¯Ø§ØªØ§ Ø£ØµÙ„Ø§Ù‹
+        res = await db.execute(select(Governorate).limit(1))
+        if res.scalars().first():
+            return
+
+        print("ðŸšš Seeding Shipping Data...")
+        for gov in INITIAL_LOCATIONS:
+            new_gov = Governorate(
+                name_ar=gov["name_ar"],
+                name_en=gov["name_en"],
+                base_shipping_fee=gov["base_fee"]
+            )
+            db.add(new_gov)
+            await db.flush()
+
+            for city in gov["cities"]:
+                new_city = City(
+                    governorate_id=new_gov.id,
+                    name_ar=city["name_ar"],
+                    name_en=city["name_en"],
+                    custom_shipping_fee=city.get("custom_fee")
+                )
+                db.add(new_city)
+        
+        await db.commit()
+        print("âœ… Shipping Data Seeded Successfully!")
+    finally:
+        if should_close:
+            await db.close()
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\shipping\service.py ====
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from decimal import Decimal
+import math
+from .models import City, Governorate
+
+class ShippingService:
+    # Ù‚ÙˆØ§Ø¹Ø¯ Ø§Ù„Ø´Ø­Ù† Ø§Ù„Ø®Ø§ØµØ© Ø¨Ø§Ù„ØµÙŠØ¯Ù„ÙŠØ©
+    FREE_SHIPPING_THRESHOLD = Decimal('1000.00') # Ø´Ø­Ù† Ù…Ø¬Ø§Ù†ÙŠ Ù„Ùˆ Ø§Ù„Ø·Ù„Ø¨ Ø¹Ø¯Ù‰ 1000 Ø¬Ù†ÙŠÙ‡
+    BASE_ALLOWED_WEIGHT = Decimal('2.0')         # Ø§Ù„ÙˆØ²Ù† Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ Ø§Ù„Ù…Ø³Ù…ÙˆØ­ (2 ÙƒØ¬Ù…)
+    EXTRA_WEIGHT_FEE = Decimal('15.00')          # Ø³Ø¹Ø± ÙƒÙ„ ÙƒÙŠÙ„Ùˆ Ø²ÙŠØ§Ø¯Ø©
+
+    @classmethod
+    async def calculate_shipping(
+        cls, 
+        db: AsyncSession, 
+        city_id: int, 
+        cart_items: list, 
+        cart_subtotal: float
+    ) -> float:
+        
+        cart_subtotal_dec = Decimal(str(cart_subtotal))
+
+        # 1. Ø´Ø­Ù† Ù…Ø¬Ø§Ù†ÙŠ Ù„Ù„Ù…Ø¨Ø§Ù„Øº Ø§Ù„ÙƒØ¨ÙŠØ±Ø©
+        if cart_subtotal_dec >= cls.FREE_SHIPPING_THRESHOLD:
+            return 0.0
+
+        # 2. Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© ÙˆØ§Ù„Ù…Ø­Ø§ÙØ¸Ø©
+        query = select(City).join(Governorate).where(City.id == city_id)
+        result = await db.execute(query)
+        city = result.scalars().first()
+
+        if not city:
+            raise ValueError("Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© ØºÙŠØ± Ù…Ø³Ø¬Ù„Ø© ÙÙŠ Ù†Ø·Ø§Ù‚ Ø§Ù„ØªÙˆØµÙŠÙ„")
+
+        # 3. ØªØ­Ø¯ÙŠØ¯ Ø§Ù„ØªØ³Ø¹ÙŠØ±Ø© (Ù„Ùˆ Ø§Ù„Ù…Ø¯ÙŠÙ†Ø© Ù„ÙŠÙ‡Ø§ Ø³Ø¹Ø± Ø®Ø§Øµ Ø®Ø¯Ù‡ØŒ Ù„Ùˆ Ù„Ø£ Ø®Ø¯ Ø³Ø¹Ø± Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø©)
+        if city.custom_shipping_fee is not None:
+            base_fee = Decimal(str(city.custom_shipping_fee))
+        else:
+            base_fee = Decimal(str(city.governorate.base_shipping_fee))
+
+        # 4. Ø­Ø³Ø§Ø¨ Ø§Ù„ÙˆØ²Ù† (Ù„Ùˆ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª ÙÙŠÙ‡Ø§ ÙˆØ²Ù†)
+        total_weight = Decimal('0.0')
+        for item in cart_items:
+            item_weight = Decimal(str(item.get('weight', 0.0)))
+            qty = Decimal(str(item.get('quantity', 1)))
+            total_weight += (item_weight * qty)
+
+        # 5. Ø¥Ø¶Ø§ÙØ© ØªØ³Ø¹ÙŠØ±Ø© Ø§Ù„ÙˆØ²Ù† Ø§Ù„Ø²Ø§Ø¦Ø¯
+        extra_weight_fee = Decimal('0.0')
+        if total_weight > cls.BASE_ALLOWED_WEIGHT:
+            extra_kg = total_weight - cls.BASE_ALLOWED_WEIGHT
+            extra_kg_rounded = Decimal(math.ceil(extra_kg)) 
+            extra_weight_fee = extra_kg_rounded * cls.EXTRA_WEIGHT_FEE
+
+        total_shipping_fee = base_fee + extra_weight_fee
+        return float(total_shipping_fee)
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\shipping\__init__.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\bulk.py ====
+
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.db.session import get_db
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª Ø§Ù„Ø®Ø§ØµØ© Ø¨Ùƒ
+from app.models import Product, ShortItemNo, Category, ProductImage, Tag, product_tags_association
+import pandas as pd
+import io
+from slugify import slugify 
+
+router = APIRouter(prefix="/bulk", tags=["Bulk Operations"])
+
+# --- Ø£Ø¯ÙˆØ§Øª Ø§Ù„Ù…Ø³Ø§Ø¹Ø¯Ø© ---
+def clean_str(value):
+    if pd.isna(value) or str(value).strip().lower() == 'nan':
+        return None
+    return str(value).strip()
+
+def clean_num(value, default=0.0):
+    if pd.isna(value): return default
+    try: return float(value)
+    except: return default
+
+@router.post("/upload-products")
+async def upload_products(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="ÙŠØ±Ø¬Ù‰ Ø±ÙØ¹ Ù…Ù„Ù Ø¥ÙƒØ³ÙŠÙ„ (.xlsx)")
+    
+    try:
+        contents = await file.read()
+        df = pd.read_excel(io.BytesIO(contents))
+        df.columns = df.columns.str.strip()
+        
+        # ÙƒØ§Ø´ Ù„Ù„Ø£Ù‚Ø³Ø§Ù… ÙˆØ§Ù„ØªØ§Ø¬Ø§Øª Ù„ØªÙ‚Ù„ÙŠÙ„ Ø§Ù„Ù€ DB Queries
+        category_cache = {}
+        tag_cache = {}
+        processed_count = 0
+
+        for _, row in df.iterrows():
+            item_no = clean_str(row.get("short_item_no"))
+            if not item_no: continue
+
+            # 1. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„Ù‚Ø³Ù… (Category)
+            cat_name = clean_str(row.get("category_name"))
+            cat_id = None
+            if cat_name:
+                if cat_name in category_cache:
+                    cat_id = category_cache[cat_name]
+                else:
+                    stmt = select(Category).where(Category.name == cat_name)
+                    res = await db.execute(stmt)
+                    cat_obj = res.scalar_one_or_none()
+                    if not cat_obj:
+                        cat_obj = Category(name=cat_name, slug=slugify(cat_name))
+                        db.add(cat_obj)
+                        await db.flush()
+                    category_cache[cat_name] = cat_obj.id
+                    cat_id = cat_obj.id
+
+            # 2. Ø¥Ù†Ø´Ø§Ø¡ Ø£Ùˆ ØªØ­Ø¯ÙŠØ« ØªØ¹Ø±ÙŠÙ Ø§Ù„ØµÙ†Ù (ShortItemNo)
+            stmt_item = select(ShortItemNo).where(ShortItemNo.short_item_no == item_no)
+            item_res = await db.execute(stmt_item)
+            item_obj = item_res.scalar_one_or_none()
+
+            if not item_obj:
+                item_obj = ShortItemNo(short_item_no=item_no)
+                db.add(item_obj)
+            
+            item_obj.ar_name = clean_str(row.get("ar_name"))
+            item_obj.en_name = clean_str(row.get("en_name"))
+            item_obj.Brand_Name = clean_str(row.get("brand_name"))
+            item_obj.description = clean_str(row.get("description"))
+            item_obj.header = clean_str(row.get("header"))
+            item_obj.sub_header = clean_str(row.get("sub_header"))
+            
+            # Ø±Ø¨Ø· Ø§Ù„ØµÙ†Ù Ø¨Ø§Ù„Ù‚Ø³Ù… (Many-to-Many)
+            if cat_id and cat_id not in [c.id for c in item_obj.categories]:
+                stmt_cat = select(Category).where(Category.id == cat_id)
+                res_cat = await db.execute(stmt_cat)
+                item_obj.categories.append(res_cat.scalar_one())
+
+            await db.flush()
+
+            # 3. Ø¥Ù†Ø´Ø§Ø¡ Ø£Ùˆ ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ø±Ø¶ ÙˆØ§Ù„Ø³Ø¹Ø± (Product)
+            stmt_prod = select(Product).where(Product.short_item_no == item_no)
+            prod_res = await db.execute(stmt_prod)
+            product_obj = prod_res.scalar_one_or_none()
+
+            if not product_obj:
+                # ØªÙˆÙ„ÙŠØ¯ Slug Ù…Ù† Ø§Ù„Ø§Ø³Ù… Ø§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠ Ø£Ùˆ ÙƒÙˆØ¯ Ø§Ù„ØµÙ†Ù
+                slug_base = item_obj.en_name if item_obj.en_name else item_no
+                product_obj = Product(short_item_no=item_no, slug=slugify(slug_base))
+                db.add(product_obj)
+            
+            product_obj.price = clean_num(row.get("price"))
+            product_obj.discount_percentage = clean_num(row.get("discount_percentage"))
+            product_obj.discount_value = clean_num(row.get("discount_value"))
+            product_obj.stock_quantity = clean_num(row.get("stock_quantity"))
+            product_obj.is_featured = bool(row.get("is_featured", False))
+            
+            # Ø­Ø³Ø§Ø¨ Ø§Ù„Ø³Ø¹Ø± Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ Ø¢Ù„ÙŠØ§Ù‹ Ø¨Ù†Ø§Ø¡Ù‹ Ø¹Ù„Ù‰ Ø§Ù„Ø¯Ø§Ù„Ø© Ø§Ù„Ù„ÙŠ ÙÙŠ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„
+            product_obj.calculate_final_price()
+
+            # 4. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„ØµÙˆØ± (Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© ÙˆØ§Ù„Ø¥Ø¶Ø§ÙÙŠØ©)
+            # Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©
+            main_img = clean_str(row.get("main_image_url"))
+            if main_img:
+                stmt_img = select(ProductImage).where(ProductImage.short_item_no == item_no, ProductImage.img_url == main_img)
+                if not (await db.execute(stmt_img)).scalar_one_or_none():
+                    db.add(ProductImage(short_item_no=item_no, img_url=main_img, is_main=True))
+
+            # Ø§Ù„ØµÙˆØ± Ø§Ù„Ø¥Ø¶Ø§ÙÙŠØ© (Ù…ÙØµÙˆÙ„Ø© Ø¨ÙØ§ØµÙ„Ø©)
+            extra_imgs = clean_str(row.get("extra_images"))
+            if extra_imgs:
+                for img_url in extra_imgs.split(','):
+                    img_url = img_url.strip()
+                    if img_url:
+                        stmt_img = select(ProductImage).where(ProductImage.short_item_no == item_no, ProductImage.img_url == img_url)
+                        if not (await db.execute(stmt_img)).scalar_one_or_none():
+                            db.add(ProductImage(short_item_no=item_no, img_url=img_url, is_main=False))
+
+            # 5. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„ØªØ§Ø¬Ø§Øª (Tags)
+            tags_str = clean_str(row.get("tags"))
+            if tags_str:
+                for t_name in tags_str.split(','):
+                    t_name = t_name.strip()
+                    if t_name:
+                        if t_name in tag_cache:
+                            tag_obj = tag_cache[t_name]
+                        else:
+                            stmt_tag = select(Tag).where(Tag.name == t_name)
+                            tag_obj = (await db.execute(stmt_tag)).scalar_one_or_none()
+                            if not tag_obj:
+                                tag_obj = Tag(name=t_name)
+                                db.add(tag_obj)
+                                await db.flush()
+                            tag_cache[t_name] = tag_obj
+                        
+                        if tag_obj not in product_obj.tags:
+                            product_obj.tags.append(tag_obj)
+
+            processed_count += 1
+            if processed_count % 50 == 0:
+                await db.commit()
+
+        await db.commit()
+        return {"status": "success", "total_processed": processed_count}
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Auth\Auth.py ====
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import joinedload
+from pydantic import BaseModel
+
+from app.db.session import get_db
+from app.models.user import User, SocialAccount, Customer, Address
+from app.schemas.User.User import GoogleLoginRequest, UserLoginResponse
+from app.core.security import create_access_token 
+
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
+
+# --- Pydantic Schemas ---
+class AddressCreate(BaseModel):
+    user_id: int
+    governorate: str
+    city: str
+    details: str
+    phone: str
+
+# ==========================================
+# 1. ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø¨Ø¬ÙˆØ¬Ù„
+# ==========================================
+@router.post("/google", response_model=UserLoginResponse)
+async def google_login(
+    payload: GoogleLoginRequest, 
+    db: AsyncSession = Depends(get_db)
+):
+    # Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø­Ø³Ø§Ø¨ Ø§Ù„Ø³ÙˆØ´ÙŠØ§Ù„ Ù…ÙŠØ¯ÙŠØ§ Ù…Ø¹ Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù… Ø§Ù„Ù…Ø±ØªØ¨Ø· Ø¨Ù‡
+    query_social = (
+        select(SocialAccount)
+        .options(joinedload(SocialAccount.user))
+        .where(
+            SocialAccount.provider == "google",
+            SocialAccount.provider_account_id == payload.google_id
+        )
+    )
+    result_social = await db.execute(query_social)
+    social_account = result_social.scalars().first()
+
+    if social_account:
+        user = social_account.user
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="This account has been deactivated."
+            )
+    else:
+        # Ø§Ù„Ø¨Ø­Ø« Ø¨Ø§Ù„Ø¥ÙŠÙ…ÙŠÙ„ ÙÙŠ Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† (Ù„Ø±Ø¨Ø· Ø§Ù„Ø­Ø³Ø§Ø¨Ø§Øª Ø¥Ø°Ø§ ÙˆØ¬Ø¯ Ø§Ù„Ø¥ÙŠÙ…ÙŠÙ„ Ù…Ø³Ø¨Ù‚Ø§Ù‹)
+        query_user = select(User).where(User.email == payload.email)
+        result_user = await db.execute(query_user)
+        user = result_user.scalars().first()
+
+        # Ø¥Ù†Ø´Ø§Ø¡ Ù…Ø³ØªØ®Ø¯Ù… Ø¬Ø¯ÙŠØ¯ Ø¥Ø°Ø§ Ù„Ù… ÙŠÙˆØ¬Ø¯
+        if not user:
+            user = User(
+                email=payload.email,
+                name=payload.name,
+                avatar_url=payload.avatar_url,
+                role="customer", # Ø§Ù„Ø¯ÙˆØ± Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ Ù„Ø£ÙŠ ØªØ³Ø¬ÙŠÙ„ Ø¬Ø¯ÙŠØ¯
+                is_active=True
+            )
+            db.add(user)
+            await db.flush() 
+
+            # Ø¥Ù†Ø´Ø§Ø¡ Ø­Ø³Ø§Ø¨ Customer Ù…Ø±Ø¨ÙˆØ· Ø¨Ø§Ù„ÙŠÙˆØ²Ø± ÙÙˆØ±Ø§Ù‹ Ù„Ù†Ø¸Ø§Ù… Ø§Ù„Ù†Ù‚Ø§Ø· ÙˆØ§Ù„ÙˆÙ„Ø§Ø¡
+            new_customer = Customer(
+                user_id=user.id,
+                total_points=0
+            )
+            db.add(new_customer)
+
+        # Ø±Ø¨Ø· Ø­Ø³Ø§Ø¨ Ø¬ÙˆØ¬Ù„ Ø§Ù„Ø¬Ø¯ÙŠØ¯ Ø¨Ø§Ù„ÙŠÙˆØ²Ø± (Ø³ÙˆØ§Ø¡ ÙƒØ§Ù† ÙŠÙˆØ²Ø± Ù…ÙˆØ¬ÙˆØ¯ Ø£Ùˆ Ù…Ù†Ø´Ø£ Ø­Ø¯ÙŠØ«Ø§Ù‹)
+        new_social = SocialAccount(
+            user_id=user.id,
+            provider="google",
+            provider_account_id=payload.google_id
+        )
+        db.add(new_social)
+        
+        await db.commit()
+        # ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ÙŠÙˆØ²Ø± Ù„Ù„ØªØ£ÙƒØ¯ Ù…Ù† Ø³Ø­Ø¨ Ø­Ù‚Ù„ Ø§Ù„Ù€ role Ù…Ù† Ø§Ù„Ù‚Ø§Ø¹Ø¯Ø© Ø¨Ø¹Ø¯ Ø§Ù„Ù€ commit
+        await db.refresh(user)
+
+    # Ø¥Ø¹Ø§Ø¯Ø© Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ÙŠÙˆØ²Ø± Ø¨Ø´ÙƒÙ„ Ù†Ø¸ÙŠÙ Ù„Ø¶Ù…Ø§Ù† Ø¸Ù‡ÙˆØ± Ø§Ù„Ù€ role ÙÙŠ Ø§Ù„Ù€ response_model
+    final_query = select(User).where(User.id == user.id)
+    final_result = await db.execute(final_query)
+    user = final_result.scalars().first()
+
+    # Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„ØªÙˆÙƒÙ† Ø§Ù„Ø®Ø§Øµ Ø¨Ø§Ù„Ø¬Ù„Ø³Ø©
+    access_token = create_access_token(data={"sub": str(user.id)})
+
+    # ÙŠØªÙ… Ø¥Ø±Ø¬Ø§Ø¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ØªÙŠ ØªØ·Ø§Ø¨Ù‚ UserLoginResponse (Ø¨Ù…Ø§ ÙÙŠÙ‡Ø§ Ø§Ù„Ù€ role Ø§Ù„Ø¢Ù†)
+    return {
+        "user": user,
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+# ==========================================
+# 2. Ø­ÙØ¸ ÙˆØªØ­Ø¯ÙŠØ« Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø¹Ù…ÙŠÙ„
+# ==========================================
+@router.post("/customers/address")
+async def add_or_update_address(
+    address_data: AddressCreate, 
+    db: AsyncSession = Depends(get_db)
+):
+    # 1. Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù€ Customer Ø§Ù„Ù…Ø±ØªØ¨Ø· Ø¨Ø§Ù„ÙŠÙˆØ²Ø±
+    result = await db.execute(select(Customer).filter(Customer.user_id == address_data.user_id))
+    customer = result.scalars().first()
+    
+    if not customer:
+        # Ø¶Ù…Ø§Ù† ÙˆØ¬ÙˆØ¯ Ø³Ø¬Ù„ Ø¹Ù…ÙŠÙ„ Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù…ÙŠÙ† Ø§Ù„Ù‚Ø¯Ø§Ù…Ù‰ Ù‚Ø¨Ù„ Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø¹Ù†ÙˆØ§Ù†
+        customer = Customer(user_id=address_data.user_id)
+        db.add(customer)
+        await db.flush()
+
+    # 2. Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ Ø§Ù„Ø­Ø§Ù„ÙŠ Ù„ØªØ­Ø¯ÙŠØ«Ù‡ Ø£Ùˆ Ø¥Ù†Ø´Ø§Ø¡ Ø¬Ø¯ÙŠØ¯
+    addr_result = await db.execute(
+        select(Address).filter(
+            Address.customer_id == customer.id,
+            Address.is_default == True
+        )
+    )
+    existing_address = addr_result.scalars().first()
+
+    if existing_address:
+        # ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ù…ÙˆØ¬ÙˆØ¯Ø©
+        existing_address.governorate = address_data.governorate
+        existing_address.city = address_data.city
+        existing_address.details = address_data.details
+        existing_address.phone = address_data.phone
+    else:
+        # Ø¥Ù†Ø´Ø§Ø¡ Ø¹Ù†ÙˆØ§Ù† Ø§ÙØªØ±Ø§Ø¶ÙŠ Ø¬Ø¯ÙŠØ¯
+        new_address = Address(
+            customer_id=customer.id,
+            governorate=address_data.governorate,
+            city=address_data.city,
+            details=address_data.details,
+            phone=address_data.phone,
+            is_default=True
+        )
+        db.add(new_address)
+
+    await db.commit()
+    return {"message": "Address updated successfully", "address": address_data}
+
+# ==========================================
+# 3. Ø¬Ù„Ø¨ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¨Ø±ÙˆÙØ§ÙŠÙ„ (Ø§Ù„Ù†Ù‚Ø§Ø· + Ø§Ù„Ø¹Ù†ÙˆØ§Ù†)
+# ==========================================
+@router.get("/profile/{user_id}")
+async def get_profile_data(user_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Customer)
+        .options(joinedload(Customer.addresses))
+        .filter(Customer.user_id == user_id)
+    )
+    customer = result.scalars().first()
+    
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+        
+    default_address = next((addr for addr in customer.addresses if addr.is_default), None)
+    
+    return {
+        "total_points": customer.total_points,
+        "default_address": default_address
+    }
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Banner\banner.py ====
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import List, Optional
+from pydantic import BaseModel
+
+from app.db.session import get_db
+from app.models.Banner import Banner
+from app.models.Category import Category 
+
+router = APIRouter(
+    prefix="/banners",
+    tags=["Banners"]
+)
+
+# --- ðŸ› ï¸ Pydantic Schemas ---
+
+# 1. Ø³ÙƒÙŠÙ…Ø§ ØµØºÙŠØ±Ø© Ù„Ù„ÙƒØ§ØªØ¬ÙˆØ±ÙŠ Ø¹Ø´Ø§Ù† ØªØ¸Ù‡Ø± Ø¬ÙˆÙ‡ Ø§Ù„Ø¨Ø§Ù†Ø±
+class CategorySimple(BaseModel):
+    id: int
+    name: str
+    
+    class Config:
+        from_attributes = True
+
+# 2. Ø³ÙƒÙŠÙ…Ø§ Ø§Ù„Ø¨Ø§Ù†Ø± Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©
+class BannerRead(BaseModel):
+    id: int
+    image_url: str
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    
+    # ðŸ‘‡ Ù‡Ù†Ø§ Ø§Ù„ØªØºÙŠÙŠØ±: Ø´ÙŠÙ„Ù†Ø§ section ÙˆØ­Ø·ÙŠÙ†Ø§ category ÙƒØ§Ù…Ù„Ø©
+    category: Optional[CategorySimple] = None 
+    category_id: Optional[int] = None
+    
+    target_screen: Optional[str] = None
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+# 1ï¸âƒ£ Get Banner By Category ID (Ø¯Ù‡ Ø§Ù„Ù„ÙŠ Ù‡ØªØ³ØªØ®Ø¯Ù…Ù‡ ÙÙŠ ØµÙØ­Ø© Men/Women)
+@router.get("/category/{category_id}", response_model=BannerRead)
+async def get_banner_by_category(category_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Ø¬Ù„Ø¨ Ø§Ù„Ø¨Ø§Ù†Ø± Ø§Ù„Ø®Ø§Øµ Ø¨Ù‚Ø³Ù… Ù…Ø¹ÙŠÙ† Ø¹Ù† Ø·Ø±ÙŠÙ‚ Ø§Ù„Ù€ ID Ø§Ù„Ø®Ø§Øµ Ø¨Ø§Ù„Ù‚Ø³Ù…
+    Ù…Ø«Ø§Ù„: Ù„Ùˆ Ù‚Ø³Ù… Ø§Ù„Ø±Ø¬Ø§Ù„ ID Ø¨ØªØ§Ø¹Ù‡ 2ØŒ Ø§Ø¨Ø¹Øª 2 Ù‡ÙŠØ±Ø¬Ø¹Ù„Ùƒ Ø§Ù„Ø¨Ø§Ù†Ø± Ø¨ØªØ§Ø¹Ù‡
+    """
+    query = (
+        select(Banner)
+        .options(selectinload(Banner.category)) # ðŸ‘ˆ Ù…Ù‡Ù… Ø¬Ø¯Ø§Ù‹: Ø¹Ø´Ø§Ù† ÙŠØ­Ù…Ù„ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù‚Ø³Ù… Ù…Ø¹ Ø§Ù„Ø¨Ø§Ù†Ø±
+        .filter(
+            Banner.category_id == category_id,
+            Banner.is_active == True
+        )
+    )
+    
+    result = await db.execute(query)
+    banner = result.scalars().first()
+    
+    if not banner:
+        raise HTTPException(status_code=404, detail=f"No active banner found for category ID: {category_id}")
+        
+    return banner
+
+
+# 2ï¸âƒ£ Get All Banners (Ù„Ù„Ø¯Ø§Ø´Ø¨ÙˆØ±Ø¯ Ø£Ùˆ Ù„Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø¹Ø§Ù…)
+@router.get("/", response_model=List[BannerRead])
+async def get_all_banners(db: AsyncSession = Depends(get_db)):
+    """
+    Ø¬Ù„Ø¨ ÙƒÙ„ Ø§Ù„Ø¨Ø§Ù†Ø±Ø§Øª
+    """
+    # Ø¨Ù†Ø¹Ù…Ù„ Loading Ù„Ù„Ø¹Ù„Ø§Ù‚Ø© Ø¹Ø´Ø§Ù† Ø§Ù„Ø³ÙƒÙŠÙ…Ø§ Ù…ØªØ¶Ø±Ø¨Ø´
+    query = select(Banner).options(selectinload(Banner.category))
+    result = await db.execute(query)
+    banners = result.scalars().all()
+    return banners
+
+
+
+# ðŸ‘‡ 3ï¸âƒ£ Get Home Banner (Ø¨Ø§Ù†Ø± Ø§Ù„ØµÙØ­Ø© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©)
+@router.get("/home", response_model=BannerRead)
+async def get_home_banner(db: AsyncSession = Depends(get_db)):
+    """
+    Ø¬Ù„Ø¨ Ø¨Ø§Ù†Ø± Ø§Ù„ØµÙØ­Ø© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ© (Ø§Ù„Ù„ÙŠ Ù…Ù„ÙˆØ´ category_id)
+    """
+    query = select(Banner).filter(
+        Banner.category_id == None, # ðŸ‘ˆ Ø¨Ù†Ø¬ÙŠØ¨ Ø§Ù„Ù„ÙŠ Ù…Ù„ÙˆØ´ Ù‚Ø³Ù…
+        Banner.title.contains("Home"), # Ø§Ø­ØªÙŠØ§Ø·ÙŠ Ø¹Ø´Ø§Ù† Ù†ØªØ£ÙƒØ¯ Ø¥Ù†Ù‡ Ø¨ØªØ§Ø¹ Ø§Ù„Ù‡ÙˆÙ…
+        Banner.is_active == True
+    )
+    
+    result = await db.execute(query)
+    banner = result.scalars().first()
+    
+    if not banner:
+        raise HTTPException(status_code=404, detail="No active home banner found")
+        
+    return banner
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Category\category.py ====
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import List
+
+from app.db.session import get_db
+from app.models.Category import Category
+from app.schemas.Category.Category import CategoryRead, CategoryWithSub
+
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø© Ù„Ù„Ù€ Endpoint Ø§Ù„Ø®Ø§Øµ Ø¨Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª
+from app.models.product import Product
+from app.models.Short_Item_No import ShortItemNo
+from app.models.ProductImage import ProductImage
+from app.schemas.Product.Product import ProductShopRead
+
+router = APIRouter(
+    prefix="/categories",
+    tags=["Product Categories"]
+)
+
+# 1ï¸âƒ£ Ø¬Ù„Ø¨ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ© (Level 0) Ù…Ø¹ Ø£Ù‚Ø³Ø§Ù…Ù‡Ø§ Ø§Ù„ÙØ±Ø¹ÙŠØ©
+@router.get("/", response_model=List[CategoryWithSub])
+async def get_main_categories(db: AsyncSession = Depends(get_db)):
+    """
+    Ø¬Ù„Ø¨ Ù‚Ø§Ø¦Ù…Ø© Ø¨Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ© (Level 0) Ù…Ø¹ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„ÙØ±Ø¹ÙŠØ© Ø§Ù„ØªØ§Ø¨Ø¹Ø© Ù„Ù‡Ø§.
+    """
+    query = select(Category).options(
+        selectinload(Category.sub_categories)
+    ).where(Category.level == 0)
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+# 2ï¸âƒ£ Ø¬Ù„Ø¨ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„ÙØ±Ø¹ÙŠØ© Ù„Ù‚Ø³Ù… Ù…Ø¹ÙŠÙ† Ø¨ÙˆØ§Ø³Ø·Ø© Ø§Ù„Ù€ ID
+@router.get("/{parent_id}/subcategories", response_model=List[CategoryRead])
+async def get_subcategories(parent_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Ø¬Ù„Ø¨ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„ÙØ±Ø¹ÙŠØ© Ø§Ù„ØªØ§Ø¨Ø¹Ø© Ù„Ù‚Ø³Ù… Ù…Ø¹ÙŠÙ†.
+    """
+    query = select(Category).where(Category.parent_id == parent_id)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+# 3ï¸âƒ£ Ø¬Ù„Ø¨ ØªÙØ§ØµÙŠÙ„ Ù‚Ø³Ù… ÙˆØ§Ø­Ø¯ Ø¨Ø§Ù„Ù€ Slug
+@router.get("/by-slug/{slug}", response_model=CategoryWithSub)
+async def get_category_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
+    query = select(Category).options(
+        selectinload(Category.sub_categories)
+    ).where(Category.slug == slug)
+    
+    result = await db.execute(query)
+    category = result.scalars().first()
+    
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Category not found"
+        )
+    return category
+# 4ï¸âƒ£ Ø¬Ù„Ø¨ Ø¬Ù…ÙŠØ¹ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø§Ù„ØªØ§Ø¨Ø¹Ø© Ù„Ù‚Ø³Ù… Ù…Ø¹ÙŠÙ† Ø¨Ø¯ÙˆÙ† Limit
+@router.get("/{slug}/products", response_model=List[ProductShopRead])
+async def get_category_products(
+    slug: str, 
+    db: AsyncSession = Depends(get_db),
+    offset: int = 0
+):
+    # 1. Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù‚Ø³Ù…
+    cat_query = select(Category).where(Category.slug == slug)
+    cat_res = await db.execute(cat_query)
+    category = cat_res.scalars().first()
+    
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    # 2. Ø§Ù„Ø§Ø³ØªØ¹Ù„Ø§Ù…: Ø´ÙŠÙ„Ù†Ø§ Ø³Ø·Ø± Ø§Ù„Ù€ .limit()
+    query = (
+        select(Product, ProductImage.img_url)
+        .join(ShortItemNo, Product.short_item_no == ShortItemNo.short_item_no)
+        .join(ShortItemNo.categories)
+        .join(
+            ProductImage, 
+            (Product.short_item_no == ProductImage.short_item_no) & (ProductImage.is_main == 1), 
+            isouter=True
+        )
+        .where(Category.id == category.id )
+        .options(selectinload(Product.item_details))
+        .order_by(Product.id.desc())
+        # ØªÙ… Ø¥Ø²Ø§Ù„Ø© limit Ù„Ø¶Ù…Ø§Ù† Ø¬Ù„Ø¨ ÙƒØ§ÙØ© Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª
+    )
+    
+    result = await db.execute(query)
+    rows = result.all()
+
+    # 3. Ø¨Ù†Ø§Ø¡ Ø§Ù„Ø¯Ø§ØªØ§
+    final_list = []
+    for product, main_img_url in rows:
+        details = product.item_details
+        product_data = {
+            "id": product.id,
+            "slug": product.slug,
+            "short_item_no": product.short_item_no,
+            "en_name": details.en_name if details and details.en_name else "Unknown Product",
+            "ar_name": details.ar_name if details and details.ar_name else "Ø¨Ø¯ÙˆÙ† Ø§Ø³Ù…",
+            "description": details.description if details and details.description else "",
+            "price": product.price,
+            "discount_value": product.discount_value or 0.0,
+            "discount_percentage": product.discount_percentage or 0.0,
+            "final_price": product.final_price,
+            "quantity": product.stock_quantity, 
+            "classification": category.name, 
+            "is_active": product.is_active,
+            "is_featured": product.is_featured,
+            "is_new_arrival": product.is_new_arrival,
+            "img_url1": main_img_url if main_img_url else None
+        }
+        try:
+            final_list.append(ProductShopRead(**product_data))
+        except Exception:
+            continue
+
+    return final_list
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Classifications\classifications.py ====
+
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import List
+
+from app.db.session import get_db
+from app.models.product import Product
+from app.models.ProductImage import ProductImage 
+from app.schemas.Product.Product import ProductShopRead 
+
+router = APIRouter(
+    prefix="/classifications",
+    tags=["Classifications"]
+)
+
+@router.get("/products", response_model=List[ProductShopRead])
+async def get_products_by_classification(
+    type: str = Query(..., description="Type: 'New Arrivals' or 'Offer'"),
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ø¬Ù„Ø¨ Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø­Ø³Ø¨ Ø§Ù„ØªØµÙ†ÙŠÙ (New Arrivals / Offers)
+    ÙŠØ±Ø¨Ø· Ø¨ÙŠÙ† Ø¬Ø¯ÙˆÙ„ Ø§Ù„Ù…Ù†ØªØ¬Ø§ØªØŒ Ø¬Ø¯ÙˆÙ„ Ø§Ù„ØµÙˆØ± (Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©)ØŒ ÙˆØ¬Ø¯ÙˆÙ„ ShortItemNo (Ø§Ù„Ù…Ø³Ù…ÙŠØ§Øª)
+    """
+    try:
+        # 1. Ø§Ù„Ø§Ø³ØªØ¹Ù„Ø§Ù… Ø§Ù„Ø£Ø³Ø§Ø³ÙŠ (Ø¨Ù†Ø¬ÙŠØ¨ Ø§Ù„Ù…Ù†ØªØ¬ + Ø§Ù„ØµÙˆØ±Ø© Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© + ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø§Ø³Ù… ÙˆØ§Ù„ÙˆØµÙ)
+        query = (
+            select(Product, ProductImage.img_url)
+            .join(
+                ProductImage, 
+                (Product.short_item_no == ProductImage.short_item_no) & (ProductImage.is_main == 1), 
+                isouter=True
+            )
+            .options(selectinload(Product.item_details)) 
+        )
+
+        # 2. ÙÙ„ØªØ±Ø© Ø°ÙƒÙŠØ© Ù„Ù„ØµÙØ­Ø© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©
+        if type == "New Arrivals":
+            query = query.where((Product.classification == type) | (Product.is_new_arrival == 1))
+        else:
+            query = query.where(Product.classification == type)
+            
+        query = query.limit(limit)
+
+        result = await db.execute(query)
+        rows = result.all()
+
+        final_list = []
+        for product, main_img_url in rows:
+            # details Ù‡Ù†Ø§ Ø¨ØªÙ…Ø«Ù„ ØµÙØ­Ø© Ø§Ù„Ù€ ShortItemNo Ø§Ù„Ù„ÙŠ ÙÙŠÙ‡Ø§ Ø§Ù„Ø£Ø³Ù…Ø§Ø¡ ÙˆØ§Ù„ÙˆØµÙ
+            details = product.item_details
+            
+            # 3. Ø¨Ù†Ø§Ø¡ Ø§Ù„Ø¯Ø§ØªØ§ Ø¨Ø£Ø³Ù…Ø§Ø¡ ØªØªØ·Ø§Ø¨Ù‚ Ù…Ø¹ Ø§Ù„Ù€ Schema (ProductShopRead)
+            product_data = {
+                "id": product.id,
+                "slug": product.slug,
+                "short_item_no": product.short_item_no,
+                
+                # ðŸ‘‡ ØªÙ… Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ Ù„Ù€ en_name Ø¹Ø´Ø§Ù† Ø§Ù„Ù€ Schema ØªÙ‚Ø±Ø£Ù‡Ø§ ØµØ­
+                "en_name": details.en_name if details and details.en_name else "Unknown Product",
+                
+                # ðŸ‘‡ Ø¶ÙÙ†Ø§ Ø§Ù„Ø§Ø³Ù… Ø¨Ø§Ù„Ø¹Ø±Ø¨ÙŠ ÙˆØ§Ù„ÙˆØµÙ ÙƒÙ…Ø§Ù† ØªØ­Ø³Ø¨Ø§Ù‹ Ù„Ùˆ Ø§Ø­ØªØ¬ØªÙ‡Ù…
+                "ar_name": details.ar_name if details and details.ar_name else "Ø¨Ø¯ÙˆÙ† Ø§Ø³Ù…",
+                "description": details.description if details and details.description else "",
+                
+                "price": product.price,
+                "discount_value": product.discount_value or 0.0,
+                "discount_percentage": product.discount_percentage or 0.0,
+                "final_price": product.final_price,
+                
+                "quantity": product.stock_quantity, 
+                
+                # ðŸ‘‡ ØªÙ… Ø§Ù„ØªØ¹Ø¯ÙŠÙ„ Ù„Ù€ classification Ø¨Ø¯Ù„ category_name
+                "classification": details.Brand_Name if details and details.Brand_Name else (product.classification or "General"),
+                
+                "is_active": product.is_active,
+                "is_featured": product.is_featured,
+                "is_new_arrival": product.is_new_arrival,
+                
+                "img_url1": main_img_url if main_img_url else None
+            }
+            
+            try:
+                # ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ù‚Ø§Ù…ÙˆØ³ Ø¥Ù„Ù‰ Schema
+                final_list.append(ProductShopRead(**product_data))
+            except Exception as val_error:
+                print(f"Validation Error for Product SKU {product.short_item_no}: {val_error}")
+                continue
+
+        return final_list
+
+    except Exception as e:
+        print(f"Critical Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Offers\offers.py ====
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from typing import List
+
+from app.db.session import get_db
+from app.models.product import Product
+# Ø§Ù„ØªØ£ÙƒØ¯ Ù…Ù† ØµØ­Ø© Ù‡Ø°Ø§ Ø§Ù„Ø³Ø·Ø±
+
+router = APIRouter(
+    prefix="/offers",
+    tags=["Offers"]
+)
+
+@router.get("/")
+async def get_all_offers(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Product).options(selectinload(Product.item_details))
+    )
+    return result.scalars().all()
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Order\__init__.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Product\product.py ====
+
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_, func 
+from sqlalchemy.orm import selectinload
+from typing import List, Optional, Dict, Any
+
+from app.db.session import get_db
+from app.models import Product, ShortItemNo, Category
+from app.schemas.Product.Product import ProductShopRead
+
+router = APIRouter(
+    prefix="/products",
+    tags=["Products Store"]
+)
+
+# --- 1. Ø¬Ù„Ø¨ Ø§Ù„ÙˆØ§ØµÙ„ Ø­Ø¯ÙŠØ«Ø§Ù‹ (New Arrivals) ---
+@router.get("/new-arrivals", response_model=List[ProductShopRead])
+async def get_new_arrivals(
+    limit: int = Query(default=10, ge=1),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    query = (
+        select(Product)
+        .options(
+            selectinload(Product.item_details).selectinload(ShortItemNo.categories),
+            selectinload(Product.item_details).selectinload(ShortItemNo.additional_images) 
+        )
+        .where(Product.is_new_arrival == '1', Product.is_active == True)
+        .order_by(Product.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+
+    result = await db.execute(query)
+    products_objs = result.unique().scalars().all()
+    
+    return [ProductShopRead.map_from_orm(p) for p in products_objs]
+
+# --- 2. Ø¬Ù„Ø¨ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ø§Ù‚ØªØ±Ø§Ø­Ø§Øª (Suggestions) ---
+# ðŸŸ¢ Ø§Ù„ØªØ¹Ø¯ÙŠÙ„: Ø­Ø·ÙŠÙ†Ø§Ù‡Ø§ Ù‡Ù†Ø§ Ù‚Ø¨Ù„ Ø§Ù„Ù€ /{product_id} Ø¹Ø´Ø§Ù† FastAPI Ù…ÙŠØªÙ„Ø®Ø¨Ø·Ø´
+@router.get("/suggestions")
+async def get_search_suggestions(
+    query: str = Query(..., min_length=1), # Ø®Ù„ÙŠÙ†Ø§Ù‡Ø§ 1 Ø¹Ø´Ø§Ù† Ø§Ù„Ø¹Ø±Ø¨ÙŠ Ø¨ÙŠØ¨Ø¯Ø£ ÙŠØ¸Ù‡Ø± ÙÙˆØ±Ø§Ù‹
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = (
+        select(ShortItemNo.en_name, ShortItemNo.ar_name, Product.id)
+        .join(Product.item_details)
+        .where(
+            or_(
+                ShortItemNo.en_name.ilike(f"%{query}%"),
+                ShortItemNo.ar_name.ilike(f"%{query}%")
+            ),
+            Product.is_active == True
+        )
+        .limit(8)
+    )
+    result = await db.execute(stmt)
+    suggestions = result.all()
+    
+    return [
+        {"id": s.id, "name": s.en_name or s.ar_name} 
+        for s in suggestions
+    ]
+
+# --- 3. Ø¬Ù„Ø¨ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª Ø§Ù„Ø¹Ø§Ù…Ø© Ù…Ø¹ Ø§Ù„ØªØ±Ù‚ÙŠÙ… ---
+@router.get("/")
+async def list_products(
+    category_slug: Optional[str] = None,
+    search: Optional[str] = None,
+    brands: Optional[List[str]] = Query(default=None), 
+    min_price: Optional[float] = Query(default=None),
+    max_price: Optional[float] = Query(default=None),
+    limit: int = Query(default=20, ge=1),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    base_query = (
+        select(Product)
+        .join(Product.item_details)
+        .where(Product.is_active == True)
+    )
+
+    if search:
+        search_term = f"%{search}%"
+        base_query = base_query.where(
+            or_(
+                ShortItemNo.ar_name.ilike(search_term),
+                ShortItemNo.en_name.ilike(search_term),
+                ShortItemNo.Brand_Name.ilike(search_term),
+                ShortItemNo.description.ilike(search_term),
+                ShortItemNo.header.ilike(search_term),
+                ShortItemNo.sub_header.ilike(search_term),
+                ShortItemNo.short_item_no.ilike(search_term)
+            )
+        )
+
+    if category_slug:
+        base_query = base_query.join(ShortItemNo.categories).where(Category.slug == category_slug)
+
+    if brands:
+        base_query = base_query.where(ShortItemNo.Brand_Name.in_(brands))
+
+    if min_price is not None:
+        base_query = base_query.where(Product.final_price >= min_price)
+    if max_price is not None:
+        base_query = base_query.where(Product.final_price <= max_price)
+
+    count_stmt = select(func.count()).select_from(base_query.subquery())
+    total_result = await db.execute(count_stmt)
+    total_count = total_result.scalar() or 0
+
+    data_query = (
+        base_query
+        .options(
+            selectinload(Product.item_details).selectinload(ShortItemNo.additional_images),
+            selectinload(Product.item_details).selectinload(ShortItemNo.categories)
+        )
+        .order_by(Product.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    
+    result = await db.execute(data_query)
+    products_objs = result.unique().scalars().all()
+
+    return {
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "products": [ProductShopRead.map_from_orm(p) for p in products_objs]
+    }
+
+# --- 4. Ø¬Ù„Ø¨ ØªÙØ§ØµÙŠÙ„ Ù…Ù†ØªØ¬ ÙˆØ§Ø­Ø¯ (ID) ---
+# ðŸ”´ Ø§Ù„ØªØ¹Ø¯ÙŠÙ„: Ù„Ø§Ø²Ù… ÙŠÙƒÙˆÙ† ÙÙŠ Ø§Ù„Ø¢Ø®Ø± Ø®Ø§Ù„Øµ Ø¹Ø´Ø§Ù† Ù…ÙŠØ³Ø±Ù‚Ø´ Ø§Ù„Ù€ Static Routes
+@router.get("/{product_id}", response_model=ProductShopRead)
+async def get_product_details(product_id: int, db: AsyncSession = Depends(get_db)):
+    query = (
+        select(Product)
+        .options(
+            selectinload(Product.item_details).selectinload(ShortItemNo.additional_images),
+            selectinload(Product.item_details).selectinload(ShortItemNo.categories)
+        )
+        .where(Product.id == product_id, Product.is_active == True)
+    )
+    
+    result = await db.execute(query)
+    product_obj = result.unique().scalars().first()
+    
+    if not product_obj: 
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    return ProductShopRead.map_from_orm(product_obj)
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\routers\Search\search.py ====
+
+
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\schemas\Category\Category.py ====
+
+from pydantic import BaseModel
+from typing import List, Optional
+
+# --- Ø§Ù„Ù€ Schema Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© Ù„Ù„Ù‚Ø³Ù… ---
+class CategoryBase(BaseModel):
+    name: str
+    slug: str
+    img_url: Optional[str] = None
+    level: int = 0
+    parent_id: Optional[int] = None
+
+# --- Schema Ø§Ù„Ù‚Ø±Ø§Ø¡Ø© (Ù„Ø¹Ø±Ø¶ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª) ---
+class CategoryRead(CategoryBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+# --- Schema Ù…ØªÙ‚Ø¯Ù…Ø© (Ù„Ø¬Ù„Ø¨ Ø§Ù„Ù‚Ø³Ù… Ù…Ø¹ Ø§Ù„Ø£Ù‚Ø³Ø§Ù… Ø§Ù„ÙØ±Ø¹ÙŠØ© Ø§Ù„ØªØ§Ø¨Ø¹Ø© Ù„Ù‡) ---
+class CategoryWithSub(CategoryRead):
+    # Ù‚Ø§Ø¦Ù…Ø© Ø¨Ø¯Ø§Ø®Ù„Ù‡Ø§ Ù†ÙØ³ Ø§Ù„Ù†ÙˆØ¹ Ù„Ø¹Ù…Ù„ Ù‡ÙŠÙƒÙ„ Ø´Ø¬Ø±ÙŠ (Self-referencing)
+    sub_categories: List['CategoryRead'] = []
+
+    class Config:
+        from_attributes = True
+
+# Ù„Ø¥ØµÙ„Ø§Ø­ Ù…Ø´ÙƒÙ„Ø© Ø§Ù„Ù€ Forward Reference ÙÙŠ Ø§Ù„Ø¯Ø§ØªØ§ Ø§Ù„Ù…ØªØ¯Ø§Ø®Ù„Ø©
+CategoryWithSub.model_rebuild()
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\schemas\Classification\Classification.py ====
+
+from pydantic import BaseModel
+from typing import Optional
+
+class ClassificationRead(BaseModel):
+    id: int
+    short_item_no: str
+    classification_type: str  # Ø²ÙŠ Offer Ø£Ùˆ New Arrival
+    img_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\schemas\Product\Product.py ====
+
+from pydantic import BaseModel
+from typing import Optional, List
+
+# ==========================================
+# 1. Schema: Ù„Ø³ØªØ© Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª (Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ù…Ø¬Ù…Ø¹Ø© Flat ÙˆÙ„ÙƒÙ† Ø¨Ø¯ÙˆÙ† ØªÙƒØ±Ø§Ø±)
+# ==========================================
+class ProductFlatRead(BaseModel):
+    id: int
+    header: Optional[str] = None
+    sub_header: Optional[str] = None
+    price: float
+    SKU: str
+    discount_percentage: float
+    final_price: float
+    is_active: bool
+    is_featured: bool
+    en_name: Optional[str] = None
+    Brand_Name: Optional[str] = None
+    # ðŸ†• Ø¨Ù†Ø³ØªÙ‚Ø¨Ù„ Ø§Ù„ØµÙˆØ± ÙˆØ§Ù„ÙØ¦Ø§Øª ÙƒÙ„Ø³ØªØ© Ø¹Ø´Ø§Ù† Ù†Ù…Ù†Ø¹ ØªÙƒØ±Ø§Ø± Ø§Ù„Ù…Ù†ØªØ¬ ÙÙŠ Ø§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯
+    images: List[str] = []
+    categories: List[str] = []
+
+    class Config:
+        from_attributes = True
+
+# ==========================================
+# 2. Schema: ØªÙØ§ØµÙŠÙ„ Ù…Ù†ØªØ¬ ÙˆØ§Ø­Ø¯ (Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø¬Ù…Ø¹Ø© Ø¨Ø§Ù„ÙƒØ§Ù…Ù„)
+# ==========================================
+class ProductShopRead(BaseModel):
+    id: int
+    price: float
+    discount_value: float
+    discount_percentage: float
+    final_price: float
+    quantity: float
+    
+    sku: Optional[str] = None
+    ar_name: Optional[str] = None
+    en_name: Optional[str] = None
+    description: Optional[str] = None
+    Brand_Name: Optional[str] = None
+    
+    header: Optional[str] = None
+    sub_header: Optional[str] = None
+    usage: Optional[str] = None
+    warning: Optional[str] = None
+    
+    img_url1: Optional[str] = None
+    img_url2: Optional[str] = None
+    img_url3: Optional[str] = None
+    img_url4: Optional[str] = None
+    
+    category: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+    @staticmethod
+    def map_from_orm(product):
+        item = product.item_details
+        
+        safe_price = float(product.price) if product.price else 0.0
+        safe_discount_val = float(product.discount_value) if product.discount_value else 0.0
+        safe_discount_perc = float(product.discount_percentage) if product.discount_percentage else 0.0
+        safe_final_price = float(product.final_price) if product.final_price else 0.0
+        safe_quantity = float(product.stock_quantity) if getattr(product, 'stock_quantity', None) else 0.0
+
+        if not item:
+            return ProductShopRead(
+                id=product.id, price=safe_price, discount_value=safe_discount_val,
+                discount_percentage=safe_discount_perc, final_price=safe_final_price, quantity=safe_quantity
+            )
+
+        images_list = [img.img_url for img in item.additional_images] if item.additional_images else []
+        img1 = images_list[0] if len(images_list) > 0 else "https://via.placeholder.com/300"
+        
+        cat_name = item.categories[0].name if getattr(item, 'categories', None) and len(item.categories) > 0 else "Uncategorized"
+
+        return ProductShopRead(
+            id=product.id, price=safe_price, discount_value=safe_discount_val,
+            discount_percentage=safe_discount_perc, final_price=safe_final_price, quantity=safe_quantity,
+            sku=item.short_item_no, ar_name=item.ar_name, en_name=item.en_name,
+            description=item.description, Brand_Name=item.Brand_Name,
+            header=item.header, sub_header=item.sub_header,
+            usage=getattr(item, 'usage', None), warning=getattr(item, 'warning', None),
+            img_url1=img1,
+            img_url2=images_list[1] if len(images_list) > 1 else None,
+            img_url3=images_list[2] if len(images_list) > 2 else None,
+            img_url4=images_list[3] if len(images_list) > 3 else None,
+            category=cat_name
+        )
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\schemas\User\User.py ====
+
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+from enum import Enum
+
+# 1. ØªØ¹Ø±ÙŠÙ Ø§Ù„Ù€ Enum Ø¹Ø´Ø§Ù† ÙŠØªØ·Ø§Ø¨Ù‚ Ù…Ø¹ Ø§Ù„Ø¯Ø§ØªØ§Ø¨ÙŠØ²
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    STAFF = "staff"
+    CUSTOMER = "customer"
+
+class GoogleLoginRequest(BaseModel):
+    google_id: str
+    email: str
+    name: str
+    avatar_url: Optional[str] = None
+
+# 2. Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ù€ role Ù‡Ù†Ø§ Ù‡Ùˆ Ø§Ù„Ù„ÙŠ Ù‡ÙŠØ­Ù„ Ù„ØºØ² Ø§Ù„Ù€ undefined
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    role: UserRole  # ðŸ‘ˆ Ø§Ù„Ø­Ù‚Ù„ Ø§Ù„Ø³Ø­Ø±ÙŠ Ø§Ù„Ù„ÙŠ ÙƒØ§Ù† Ù†Ø§Ù‚Øµ
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+class UserLoginResponse(BaseModel):
+    user: UserResponse
+    access_token: str
+    token_type: str = "bearer"
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\services\excel_service.py ====
+
+import pandas as pd
+import io
+import re
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import (
+    ShortItemNo, Product, Category, Tag, 
+    ProductImage, Warehouse, TransactionType
+)
+
+def create_slug(text):
+    if not text: return ""
+    # ØªØ­ÙˆÙŠÙ„ Ø§Ù„Ù†Øµ Ù„Ù€ Slug Ù…ØªÙˆØ§ÙÙ‚ Ù…Ø¹ Ø§Ù„Ø±ÙˆØ§Ø¨Ø· (ÙŠØ¯Ø¹Ù… Ø§Ù„Ø¹Ø±Ø¨ÙŠ ÙˆØ§Ù„Ø¥Ù†Ø¬Ù„ÙŠØ²ÙŠ)
+    text = str(text).lower().strip()
+    text = re.sub(r'[^a-z0-9\u0600-\u06FF\s-]', '', text)
+    text = re.sub(r'[\s]+', '-', text)
+    return text
+
+def generate_product_template():
+    """ØªÙˆÙ„ÙŠØ¯ Ù…Ù„Ù Ø¥ÙƒØ³ÙŠÙ„ ÙØ§Ø±Øº Ø¨Ø§Ù„Ø£Ø¹Ù…Ø¯Ø© Ø§Ù„Ù…Ø·Ù„ÙˆØ¨Ø©"""
+    columns = [
+        "short_item_no", "ar_name", "en_name", "header", "sub_header", 
+        "description", "brand", "price", "discount_value", "discount_percentage", 
+        "stock", "categories", "tags", "images"
+    ]
+    df = pd.DataFrame(columns=columns)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Data_Import')
+    output.seek(0)
+    return output
+
+async def process_excel_import(file_content: bytes, db: AsyncSession):
+    """Ù…Ø¹Ø§Ù„Ø¬Ø© Ù…Ù„Ù Ø§Ù„Ø¥ÙƒØ³ÙŠÙ„ Ø§Ù„Ù…Ø±ÙÙˆØ¹ ÙˆØªØ­Ø¯ÙŠØ« Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª"""
+    try:
+        df = pd.read_excel(io.BytesIO(file_content))
+        # ØªÙ†Ø¸ÙŠÙ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ù…Ù† Ø§Ù„Ù‚ÙŠÙ… Ø§Ù„ÙØ§Ø±ØºØ© (NaN)
+        df = df.where(pd.notnull(df), None)
+    except Exception as e:
+        return {"error": f"Invalid Excel Format: {str(e)}"}
+
+    results = {"added": 0, "updated": 0, "errors": []}
+
+    for index, row in df.iterrows():
+        try:
+            short_code = str(row['short_item_no']).strip()
+            if not short_code or short_code == 'None': continue
+
+            # 1. Ø§Ù„ØªØ¹Ø§Ù…Ù„ Ù…Ø¹ ØªØ¹Ø±ÙŠÙ Ø§Ù„ØµÙ†Ù (ShortItemNo)
+            stmt = select(ShortItemNo).where(ShortItemNo.short_item_no == short_code)
+            item = (await db.execute(stmt)).scalars().first()
+
+            if not item:
+                item = ShortItemNo(
+                    short_item_no=short_code,
+                    ar_name=row.get('ar_name'),
+                    en_name=row.get('en_name'),
+                    header=row.get('header'),
+                    sub_header=row.get('sub_header'),
+                    description=row.get('description'),
+                    Brand_Name=row.get('brand')
+                )
+                db.add(item)
+                await db.flush() # Ø§Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ id Ø§Ù„ØµÙ†Ù ÙÙˆØ±Ø§Ù‹
+            else:
+                # ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© Ù„Ùˆ Ø§Ù„ØµÙ†Ù Ù…ÙˆØ¬ÙˆØ¯
+                item.ar_name = row.get('ar_name') or item.ar_name
+                item.header = row.get('header') or item.header
+                item.description = row.get('description') or item.description
+
+            # 2. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„ØµÙˆØ± Ø§Ù„Ø¥Ø¶Ø§ÙÙŠØ© (Gallery)
+            if row.get('images'):
+                urls = [u.strip() for u in str(row.get('images')).split('|') if u.strip()]
+                for i, url in enumerate(urls):
+                    img_stmt = select(ProductImage).where(
+                        (ProductImage.short_item_id == item.id) & (ProductImage.img_url == url)
+                    )
+                    if not (await db.execute(img_stmt)).scalars().first():
+                        db.add(ProductImage(short_item_id=item.id, img_url=url, is_main=(i == 0)))
+
+            # 3. Ø§Ù„ØªØ¹Ø§Ù…Ù„ Ù…Ø¹ Ø§Ù„Ù…Ù†ØªØ¬ Ø§Ù„Ù…Ø³Ø¹Ø± (Product)
+            p_stmt = select(Product).where(Product.short_item_id == item.id)
+            product = (await db.execute(p_stmt)).scalars().first()
+            
+            price = float(row.get('price') or 0)
+            d_val = float(row.get('discount_value') or 0)
+            d_per = float(row.get('discount_percentage') or 0)
+            new_stock = float(row.get('stock') or 0)
+
+            if not product:
+                product = Product(
+                    short_item_id=item.id,
+                    slug=create_slug(f"{row.get('en_name') or 'item'}-{short_code}"),
+                    price=price,
+                    discount_value=d_val,
+                    discount_percentage=d_per,
+                    stock_quantity=new_stock,
+                    is_active=True
+                )
+                product.calculate_final_price()
+                db.add(product)
+                await db.flush()
+                
+                # 4. ØªØ³Ø¬ÙŠÙ„ Ø­Ø±ÙƒØ© Ù…Ø®Ø²Ù† Ø£ÙˆÙ„ Ù…Ø¯Ø© (Inventory Adjustment)
+                if new_stock > 0:
+                    db.add(Warehouse(
+                        product_id=product.id,
+                        transaction_type=TransactionType.ADJUSTMENT,
+                        quantity=new_stock,
+                        unit_price=price,
+                        notes="Initial Excel Import"
+                    ))
+                results["added"] += 1
+            else:
+                # ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø³Ø¹Ø± ÙˆØ§Ù„Ù…Ø®Ø²Ù†
+                old_stock = product.stock_quantity
+                product.price = price
+                product.discount_value = d_val
+                product.discount_percentage = d_per
+                product.stock_quantity = new_stock # ØªØ­Ø¯ÙŠØ« Ù…Ø¨Ø§Ø´Ø± Ù„Ù„Ù…Ø®Ø²Ù†
+                product.calculate_final_price()
+                
+                # ØªØ³Ø¬ÙŠÙ„ Ø­Ø±ÙƒØ© ØªØ¹Ø¯ÙŠÙ„ Ù„Ùˆ Ø§Ù„Ù…Ø®Ø²Ù† Ø§Ø®ØªÙ„Ù
+                if old_stock != new_stock:
+                    db.add(Warehouse(
+                        product_id=product.id,
+                        transaction_type=TransactionType.ADJUSTMENT,
+                        quantity=new_stock - old_stock,
+                        unit_price=price,
+                        notes="Excel Stock Update"
+                    ))
+                results["updated"] += 1
+
+            # 5. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„ØªØ§Ø¬Ø§Øª (Tags)
+            if row.get('tags'):
+                t_names = [t.strip() for t in str(row.get('tags')).split(',') if t.strip()]
+                for tn in t_names:
+                    tslug = create_slug(tn)
+                    tag = (await db.execute(select(Tag).where(Tag.slug == tslug))).scalars().first()
+                    if not tag:
+                        tag = Tag(name=tn, slug=tslug)
+                        db.add(tag)
+                        await db.flush()
+                    
+                    # Ø±Ø¨Ø· Ø§Ù„ØªØ§Ø¬ Ø¨Ø§Ù„Ù…Ù†ØªØ¬ Ù„Ùˆ Ù…Ø´ Ù…Ø±Ø¨ÙˆØ·
+                    # Ù…Ù„Ø§Ø­Ø¸Ø©: Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† ÙˆØ¬ÙˆØ¯ Ø§Ù„ØªØ§Ø¬ ÙÙŠ product.tags ÙŠØ­ØªØ§Ø¬ Ù„Ù€ await Ù„Ùˆ ÙƒØ§Ù†Øª Ø§Ù„Ø¹Ù„Ø§Ù‚Ø© lazy
+                    product.tags.append(tag) 
+
+            # 6. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø§Ù„Ø£Ù‚Ø³Ø§Ù… (Categories)
+            if row.get('categories'):
+                c_names = [c.strip() for c in str(row.get('categories')).split(',') if c.strip()]
+                for cn in c_names:
+                    cslug = create_slug(cn)
+                    c_obj = (await db.execute(select(Category).where(Category.slug == cslug))).scalars().first()
+                    if not c_obj:
+                        c_obj = Category(name=cn, slug=cslug, level=0)
+                        db.add(c_obj)
+                        await db.flush()
+                    if c_obj not in item.categories:
+                        item.categories.append(c_obj)
+
+        except Exception as e:
+            results["errors"].append(f"Row {index+2}: {str(e)}")
+            continue
+
+    await db.commit()
+    return results
+
+
+==== FILE: E:\Sharawy\PharmacyApp\ecommerce_backend\app\services\order_service.py ====
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, func
+from fastapi import HTTPException, status
+from datetime import datetime
+
+# Ø§Ø³ØªÙŠØ±Ø§Ø¯ Ø§Ù„Ù…ÙˆØ¯ÙŠÙ„Ø§Øª Ù…Ù† Ù…Ø³Ø§Ø±Ø§ØªÙ‡Ø§ Ø§Ù„ØµØ­ÙŠØ­Ø©
+from app.modules.orders.models import Order, OrderItem, OrderStatus
+from app.models.user import Customer, PointsTransaction
+from app.models.product import Product
+from app.models.Short_Item_No import ShortItemNo
+
+class OrderService:
+
+    @classmethod
+    async def create_order(
+        cls, 
+        db: AsyncSession, 
+        customer_id: int, 
+        cart_items: list, 
+        shipping_data: dict, 
+        shipping_fees: float = 0, 
+        coupon_code: str = None,
+        points_to_redeem: int = 0  # Ø¥Ø¶Ø§ÙØ© Ø®ÙŠØ§Ø± Ø®ØµÙ… Ø§Ù„Ù†Ù‚Ø§Ø· Ù„Ù„Ù…Ø³ØªØ®Ø¯Ù…
+    ):
+        """
+        Ø¥Ù†Ø´Ø§Ø¡ Ø·Ù„Ø¨ Ø¬Ø¯ÙŠØ¯:
+        1. Ø§Ù„ØªØ­Ù‚Ù‚ Ù…Ù† Ø§Ù„Ù…Ù†ØªØ¬Ø§Øª ÙˆØ­Ø³Ø§Ø¨ Ø§Ù„Ø³Ø¹Ø±.
+        2. Ø®ØµÙ… Ø§Ù„Ù†Ù‚Ø§Ø· (Redeem) Ø¥Ù† ÙˆØ¬Ø¯Øª.
+        3. Ø­Ø³Ø§Ø¨ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…ÙƒØªØ³Ø¨Ø© (Earned) ÙƒÙ€ Pending.
+        """
+        try:
+            total_items_price = 0
+            order_items = []
+            earned_points = 0
+
+            # 1. Ù…Ø¹Ø§Ù„Ø¬Ø© Ø¹Ù†Ø§ØµØ± Ø§Ù„Ø³Ù„Ø©
+            for item in cart_items:
+                # Ø§Ù„Ø¨Ø­Ø« Ø¹Ù† Ø§Ù„Ù…Ù†ØªØ¬ (Product) ÙˆØªÙØ§ØµÙŠÙ„Ù‡ (ShortItemNo)
+                product_res = await db.execute(
+                    select(Product).filter(Product.id == item['product_id'])
+                )
+                product = product_res.scalars().first()
+                
+                if not product:
+                    raise HTTPException(status_code=404, detail=f"Ø§Ù„Ù…Ù†ØªØ¬ ID {item['product_id']} ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯")
+
+                # Ø§Ù„Ø³Ø¹Ø± Ø¨Ø¹Ø¯ Ø§Ù„Ø®ØµÙ… Ø¥Ù† ÙˆØ¬Ø¯
+                price = float(product.final_price or product.price)
+                qty = float(item['quantity'])
+                subtotal = price * qty
+                total_items_price += subtotal
+                
+                # Ø­Ø³Ø§Ø¨ Ù†Ù‚Ø§Ø· ØªÙ‚Ø¯ÙŠØ±ÙŠØ© (Ù…Ø«Ù„Ø§Ù‹ 1% Ù…Ù† Ù‚ÙŠÙ…Ø© Ø§Ù„Ù…Ù†ØªØ¬)
+                earned_points += int(subtotal * 0.01) 
+
+                order_items.append(OrderItem(
+                    product_id=product.id,
+                    quantity=qty,
+                    unit_price=price,
+                    subtotal=subtotal
+                ))
+
+            # 2. Ù…Ù†Ø·Ù‚ Ø®ØµÙ… Ø§Ù„Ù†Ù‚Ø§Ø· (Loyalty Redemption)
+            points_discount_value = 0
+            if points_to_redeem > 0 and customer_id:
+                cust_res = await db.execute(select(Customer).filter(Customer.id == customer_id))
+                customer = cust_res.scalars().first()
+                
+                if customer and customer.total_points >= points_to_redeem:
+                    # Ø§ÙØªØ±Ø§Ø¶ÙŠØ§Ù‹: ÙƒÙ„ 10 Ù†Ù‚Ø§Ø· ØªØ³Ø§ÙˆÙŠ 1 Ø¬Ù†ÙŠÙ‡ (ÙŠÙ…ÙƒÙ†Ùƒ ØªØºÙŠÙŠØ± Ø§Ù„Ù†Ø³Ø¨Ø©)
+                    points_discount_value = points_to_redeem / 10 
+                    # Ø®ØµÙ… Ø§Ù„Ù†Ù‚Ø§Ø· ÙÙˆØ±Ø§Ù‹ Ù…Ù† Ø±ØµÙŠØ¯ Ø§Ù„Ø¹Ù…ÙŠÙ„
+                    customer.total_points -= points_to_redeem
+                else:
+                    raise HTTPException(status_code=400, detail="Ø±ØµÙŠØ¯ Ø§Ù„Ù†Ù‚Ø§Ø· ØºÙŠØ± ÙƒØ§ÙÙ")
+
+            # 3. Ø­Ø³Ø§Ø¨ Ø§Ù„Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ
+            total_final = (total_items_price + shipping_fees) - points_discount_value
+            if total_final < 0: total_final = 0
+
+            # 4. Ø¥Ù†Ø´Ø§Ø¡ ÙƒØ§Ø¦Ù† Ø§Ù„Ø·Ù„Ø¨ (Order)
+            new_order = Order(
+                customer_id=customer_id,
+                order_number=f"ORD-{int(datetime.now().timestamp())}",
+                total_raw_amount=total_items_price,
+                shipping_fees=shipping_fees,
+                points_discount=points_discount_value,  # Ø§Ù„Ù‚ÙŠÙ…Ø© Ø§Ù„Ù…Ø§Ù„ÙŠØ© Ø§Ù„Ù…Ø®ØµÙˆÙ…Ø©
+                used_points=points_to_redeem,           # Ø¹Ø¯Ø¯ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…Ø©
+                total_final_amount=total_final,
+                status=OrderStatus.PENDING,
+                # Ø­Ù‚ÙˆÙ„ Ø§Ù„Ø´Ø­Ù†
+                shipping_first_name=shipping_data.get("first_name"),
+                shipping_last_name=shipping_data.get("last_name"),
+                shipping_governorate=shipping_data.get("governorate"),
+                shipping_city=shipping_data.get("city"),
+                shipping_details=shipping_data.get("details"),
+                shipping_phone=shipping_data.get("phone"),
+                payment_method="Cash",
+                is_paid=False
+            )
+            new_order.items = order_items
+            
+            db.add(new_order)
+            await db.flush() # Ù„Ù„Ø­ØµÙˆÙ„ Ø¹Ù„Ù‰ id Ø§Ù„Ø·Ù„Ø¨ Ù„Ù„Ø±Ø¨Ø·
+
+            # 5. ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ù†Ù‚Ø§Ø· "Ø§Ù„Ù…ÙƒØªØ³Ø¨Ø©" (Earned Points) ÙƒÙ€ Pending
+            if customer_id and earned_points > 0:
+                new_tx = PointsTransaction(
+                    customer_id=customer_id,
+                    points=earned_points,
+                    transaction_type="EARNED",
+                    order_id=new_order.id,
+                    description=f"Ù†Ù‚Ø§Ø· Ø§Ù„Ø·Ù„Ø¨ {new_order.order_number} - Ù‚ÙŠØ¯ Ø§Ù„Ø§Ù†ØªØ¸Ø§Ø±",
+                    status="pending",
+                    is_confirmed=False
+                )
+                db.add(new_tx)
+
+            await db.commit()
+            await db.refresh(new_order)
+            return new_order
+
+        except Exception as e:
+            await db.rollback()
+            print(f"âŒ Error in OrderService Create: {str(e)}")
+            raise e
+
+    @classmethod
+    async def update_status(cls, db: AsyncSession, order_id: int, new_status: OrderStatus):
+        """
+        ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„Ø·Ù„Ø¨ ÙˆØªØ£ÙƒÙŠØ¯ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…ÙƒØªØ³Ø¨Ø© Ø¹Ù†Ø¯ Ø§Ù„ØªØ³Ù„ÙŠÙ…
+        """
+        result = await db.execute(select(Order).filter(Order.id == order_id))
+        order = result.scalars().first()
+
+        if not order:
+            raise HTTPException(status_code=404, detail="Ø§Ù„Ø·Ù„Ø¨ ØºÙŠØ± Ù…ÙˆØ¬ÙˆØ¯")
+
+        if order.status == new_status:
+            return order
+
+        order.status = new_status
+
+        # Ø¥Ø°Ø§ ØªÙ… Ø§Ù„ØªØ³Ù„ÙŠÙ… (DELIVERED)ØŒ ÙŠØªÙ… ØªØ­ÙˆÙŠÙ„ Ù†Ù‚Ø§Ø· Ø§Ù„Ù€ Pending Ø¥Ù„Ù‰ Ø±ØµÙŠØ¯ Ø­Ù‚ÙŠÙ‚ÙŠ
+        if new_status == OrderStatus.DELIVERED:
+            await cls._confirm_points_logic(db, order)
+            order.is_paid = True
+
+        # Ø¥Ø°Ø§ ØªÙ… Ø§Ù„Ø¥Ù„ØºØ§Ø¡ (CANCELLED)ØŒ ÙŠØªÙ… Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…Ù†ØªØ¸Ø±Ø© ÙˆØ¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…Ø© (Ø¥Ù† ÙˆØ¬Ø¯Øª)
+        if new_status == OrderStatus.CANCELLED:
+            await cls._cancel_points_logic(db, order)
+
+        await db.commit()
+        await db.refresh(order)
+        return order
+
+    @classmethod
+    async def _confirm_points_logic(cls, db: AsyncSession, order: Order):
+        """ØªØ£ÙƒÙŠØ¯ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…ÙƒØªØ³Ø¨Ø© ÙˆØ¥Ø¶Ø§ÙØªÙ‡Ø§ Ù„Ø±ØµÙŠØ¯ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ø§Ù„Ù†Ù‡Ø§Ø¦ÙŠ"""
+        tx_res = await db.execute(
+            select(PointsTransaction).filter(
+                PointsTransaction.order_id == order.id,
+                PointsTransaction.status == "pending",
+                PointsTransaction.transaction_type == "EARNED"
+            )
+        )
+        transaction = tx_res.scalars().first()
+
+        if transaction:
+            transaction.status = "confirmed"
+            transaction.is_confirmed = True
+            
+            # ØªØ­Ø¯ÙŠØ« Ø±ØµÙŠØ¯ Ø§Ù„Ø¹Ù…ÙŠÙ„
+            await db.execute(
+                update(Customer)
+                .where(Customer.id == order.customer_id)
+                .values(total_points=Customer.total_points + transaction.points)
+            )
+
+    @classmethod
+    async def _cancel_points_logic(cls, db: AsyncSession, order: Order):
+        """Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…Ù†ØªØ¸Ø±Ø© ÙˆØ¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…Ø© ÙÙŠ Ø§Ù„Ø®ØµÙ… Ù„Ù„Ø¹Ù…ÙŠÙ„"""
+        # 1. Ø¥Ù„ØºØ§Ø¡ Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„Ù…ÙƒØªØ³Ø¨Ø©
+        await db.execute(
+            update(PointsTransaction)
+            .where(PointsTransaction.order_id == order.id)
+            .values(status="cancelled", is_confirmed=False)
+        )
+        
+        # 2. Ø¥Ø¹Ø§Ø¯Ø© Ø§Ù„Ù†Ù‚Ø§Ø· Ø§Ù„ØªÙŠ Ø§Ø³ØªØ®Ø¯Ù…Ù‡Ø§ Ø§Ù„Ø¹Ù…ÙŠÙ„ Ù„Ù„Ø®ØµÙ… (Ù„Ø£Ù† Ø§Ù„Ø·Ù„Ø¨ Ø£Ù„ØºÙŠ)
+        if order.used_points > 0:
+            await db.execute(
+                update(Customer)
+                .where(Customer.id == order.customer_id)
+                .values(total_points=Customer.total_points + order.used_points)
+            )
+

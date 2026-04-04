@@ -1,0 +1,55 @@
+import { StyleSheet } from "react-native";
+import { COLORS } from "../../../../theme/colors";
+export const styles = StyleSheet.create({
+  section: { marginBottom: 56 },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  titleContainer: { flexDirection: "row", alignItems: "center" },
+  indicator: {
+    width: 8,
+    height: 32,
+    backgroundColor: COLORS.primary,
+    borderRadius: 4,
+    marginRight: 12,
+  },
+  title: { fontSize: 24, fontWeight: "bold", color: COLORS.slate900 },
+  seeAll: { color: COLORS.primary, fontWeight: "bold", fontSize: 14 },
+  listContainer: { paddingBottom: 16 },
+  card: {
+    width: 300,
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginRight: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    elevation: 2,
+  },
+  image: { width: "100%", height: 180 },
+  content: { padding: 20 },
+  tag: {
+    fontSize: 10,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  articleTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.slate900,
+    marginBottom: 12,
+  },
+  desc: {
+    fontSize: 12,
+    color: COLORS.slate500,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  readMore: { flexDirection: "row", alignItems: "center" },
+  readMoreText: { fontSize: 12, fontWeight: "bold", marginRight: 4 },
+});

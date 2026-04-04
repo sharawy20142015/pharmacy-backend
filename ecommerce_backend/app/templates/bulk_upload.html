@@ -1,0 +1,62 @@
+﻿{% extends "sqladmin/layout.html" %} {% block content %}
+<div class="container-fluid">
+  <div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+      <div class="card">
+        <div class="card-header bg-primary text-white">
+          <h5 class="mb-0">
+            <i class="fa-solid fa-file-excel"></i> Bulk Product Import
+          </h5>
+        </div>
+        <div class="card-body text-center">
+          <p class="text-muted">
+            استخدم هذه الصفحة لرفع كميات كبيرة من المنتجات دفعة واحدة.
+          </p>
+
+          <div class="d-grid gap-2 d-md-block mb-4">
+            <a href="/admin/download-template" class="btn btn-outline-success">
+              <i class="fa-solid fa-download"></i> تحميل نموذج الإكسل (Template)
+            </a>
+          </div>
+
+          <hr />
+
+          <form
+            action="/admin/process-upload"
+            method="post"
+            enctype="multipart/form-data"
+            class="mt-4"
+          >
+            <div class="mb-3">
+              <label class="form-label">اختر ملف الإكسل بعد ملئه:</label>
+              <input
+                type="file"
+                name="excel_file"
+                class="form-control"
+                accept=".xlsx, .xls"
+                required
+              />
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-upload"></i> بدء عملية الرفع والمعالجة
+            </button>
+          </form>
+
+          {% if result %}
+          <div class="alert alert-info mt-4 text-start">
+            <h6>نتيجة العملية:</h6>
+            <ul>
+              <li>تم إضافة: {{ result.added }} منتج جديد</li>
+              <li>تم تحديث: {{ result.updated }} منتج موجود</li>
+              {% if result.errors %}
+              <li class="text-danger">الأخطاء: {{ result.errors|length }}</li>
+              {% endif %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
