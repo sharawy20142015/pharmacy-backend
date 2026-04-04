@@ -28,3 +28,4 @@ google-auth==2.27.0
 # --- Utilities ---
 python-slugify==8.0.4
 typing-extensions==4.9.0
+requests==2.31.0
