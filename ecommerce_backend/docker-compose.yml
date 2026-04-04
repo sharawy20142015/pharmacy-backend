@@ -1,13 +1,12 @@
 version: "3.8"
 
 services:
-  api:
+  pharmacy-api:
     build: .
-    container_name: pharmacy_backend
-    ports:
-      - "8004:8000" # بنربط بورت 8004 اللي إنت شغال بيه ببورت 8000 جوه الدوكر
+    container_name: pharmacy-api
+    network_mode: "host"
     env_file:
-      - .env
+      - .env.production
     restart: always
     volumes:
-      - .:/app # عشان لو عدلت في الكود يسمع فوراً وإنت بتعمل تيست
+      - ./static:/app/static # عشان لو رفعت صور تفضل موجودة حتى لو الـ container اتمسح
