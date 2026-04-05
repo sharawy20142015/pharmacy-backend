@@ -12,17 +12,20 @@ import { useCart } from "../context/CartContext";
 import HomeScreen from "../screens/Home/HomeScreen";
 import StoreScreen from "../screens/Store/StoreScreen";
 import CartScreen from "../screens/CartScreen/CartScreen";
-import ProductDetailsScreen from "../screens/ProductDetailsScreen/ProductDetailsScreen";
 import CheckoutScreen from "../screens/CheckoutScreen/CheckoutScreen";
 import SuccessScreen from "../screens/Success/SuccessScreen";
 import LoginScreen from "../screens/Login/LoginScreen";
 import ProfileScreen from "../screens/Profile/ProfileScreen";
+import RequestProductScreen from "../screens/Home/components/RequestProductScreen/RequestProductScreen";
+
+// 👈 استيراد شاشة طلب المنتج الجديدة (مرة واحدة فقط أهي)
 
 // شاشة الإدارة
 import OrderControlScreen from "../screens/Admin/OrderManagement/OrderControlScreen";
+import AdminControlScreen from "../screens/Admin/OrderManagement/AdminControlScreen";
 
 import { COLORS } from "../theme/colors";
-import AdminControlScreen from "../screens/Admin/OrderManagement/AdminControlScreen";
+import ProductDetailsScreen from "../screens/ProductDetailsScreen/ProductDetailsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -149,6 +152,12 @@ const AppNavigator = () => {
         <Stack.Screen name="Checkout" component={CheckoutScreen} />
         <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
         <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
+
+        {/* 👈 تم إضافة شاشة طلب المنتج هنا */}
+        <Stack.Screen
+          name="RequestProductScreen"
+          component={RequestProductScreen}
+        />
       </Stack.Group>
     </Stack.Navigator>
   );

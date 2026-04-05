@@ -49,22 +49,23 @@ const linking = {
       // 4. مسارات عامة
       ProductDetails: "product/:productId",
 
-      // 🟢 تعديل مسار الـ Checkout لحل مشكلة الـ Refresh
+      // 🟢 مسار الـ Checkout
       Checkout: {
         path: "checkout",
         parse: {
-          // يحول النص اللي في الـ URL لكائن (Object) عند الريفرش
           expressItem: (data) =>
             data ? JSON.parse(decodeURIComponent(data)) : null,
         },
         stringify: {
-          // يحول كائن المنتج لنص مشفر في الـ URL عشان يفضل موجود
           expressItem: (data) =>
             data ? encodeURIComponent(JSON.stringify(data)) : "",
         },
       },
 
       SuccessScreen: "success",
+
+      // 👇 🟢 المسار الجديد لشاشة طلب المنتج
+      RequestProductScreen: "request-product",
     },
   },
 };
