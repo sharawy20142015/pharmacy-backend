@@ -1,6 +1,11 @@
 node_modules/
 __pycache__/
 *.pyc
-.expo/
 venv/
 .env
+venv/
+node_modules/
+__pycache__/
+*.env*
+.expo/
+dist/

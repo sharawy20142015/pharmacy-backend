@@ -15,6 +15,7 @@ const linking = {
     Linking.createURL("/"),
     "http://localhost:8081",
     "http://10.100.16.30:8081",
+    "http://54.234.4.149:8081",
   ],
   config: {
     screens: {
