@@ -1,31 +1,35 @@
 import axios from "axios";
-// لو شغال موبايل (React Native) استخدم AsyncStorage، لو ويب استخدم localStorage
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// الـ IP بتاع الباك إند بتاعك
-const BASE_URL = "http://10.100.16.30:8004";
+/**
+ * سحب الـ URL من ملفات الـ .env بناءً على وضع التشغيل
+ * Expo هيقرأ .env.development في اللوكال
+ * وهيقرأ .env.production لو حددت وضع الـ production
+ */
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+
+// طباعة بسيطة في الكونسول للتأكد إن الـ IP اللي مسحوب صح (مفيدة جداً في الـ Debugging)
+console.log("🚀 Connecting to Backend at:", BASE_URL);
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 10000, // لو السيرفر ماردش بعد 10 ثواني يديك Error
+  timeout: 15000, // زودنا التايم أوت لـ 15 ثانية عشان لو النت ضعيف عند العميل
 });
 
-// 1️⃣ Request Interceptor (بنركب التوكن قبل ما الريكويست يروح)
+// 1️⃣ Request Interceptor (تركيب التوكن أوتوماتيك في كل طلب)
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      // بنجيب التوكن من التخزين (لو شغال ويب بس، غيرها لـ localStorage.getItem('token'))
       const token = await AsyncStorage.getItem("userToken");
 
       if (token) {
-        // بنضيف التوكن في الهيدر بتاع أي ريكويست طالع
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch (error) {
-      console.error("Error retrieving token:", error);
+      console.error("❌ Auth Token Error:", error);
     }
     return config;
   },
@@ -34,23 +38,30 @@ apiClient.interceptors.request.use(
   },
 );
 
-// 2️⃣ Response Interceptor (بنتعامل مع الرد اللي راجع من السيرفر)
+// 2️⃣ Response Interceptor (التعامل مع الردود وحالات انتهاء الجلسة)
 apiClient.interceptors.response.use(
   (response) => {
-    // لو الريكويست نجح، بنرجع الداتا علطول
     return response;
   },
-  (error) => {
-    console.error("API Error: ", error.response?.data || error.message);
+  async (error) => {
+    const originalRequest = error.config;
 
-    // لو السيرفر رد بـ 401 (يعني اليوزر مش مسجل دخول أو التوكن بتاعه انتهى)
+    // لو السيرفر رد بـ 401 (غير مصرح به)
     if (error.response?.status === 401) {
-      console.log(
-        "Unauthorized! You should logout the user or redirect to Login.",
+      console.warn(
+        "⚠️ Session expired or unauthorized. Redirecting to login...",
       );
-      // تقدر هنا تنادي على دالة تعمل Logout لليوزر أوتوماتيك
+
+      // هنا ممكن تمسح التوكن المنتهي أوتوماتيك
+      await AsyncStorage.removeItem("userToken");
+
+      // ملحوظة: لو عندك Navigation ممكن تبعت اليوزر لصفحة الـ Login هنا
     }
 
+    console.error(
+      "🔥 API Error Detail:",
+      error.response?.data || error.message,
+    );
     return Promise.reject(error);
   },
 );

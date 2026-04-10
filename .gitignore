@@ -1,9 +1,17 @@
 node_modules/
 __pycache__/
 *.pyc
-.expo/
 venv/
 .env
+<<<<<<< HEAD
 .env.development
 .env.production
 sharawy.pem
+=======
+venv/
+node_modules/
+__pycache__/
+*.env*
+.expo/
+dist/
+>>>>>>> d3e42adff385bc363722f58a3b65c5aadae59885

@@ -13,6 +13,7 @@ import Footer from "../../components/UI/Footer/Footer";
 // 3. استيراد سكاشن الصفحة الرئيسية (Home Sections)
 import SearchBar from "./components/SearchBar/SearchBar";
 import HeroBanner from "./components/HeroBanner/HeroBanner";
+import RequestProduct from "./components/RequestProduct/RequestProduct"; // 👈 تم إضافة الاستيراد هنا
 import ShopByCategory from "./components/ShopByCategory/ShopByCategory";
 import OffersSection from "./components/OffersSection/OffersSection";
 import NewArrivals from "./components/NewArrivals/NewArrivals";
@@ -57,6 +58,10 @@ const HomeScreen = () => {
         <View style={styles.container}>
           <SearchBar />
           <HeroBanner />
+
+          {/* 👈 الكومبوننت الجديد تم إضافته تحت البانر مباشرة */}
+          <RequestProduct />
+
           <ShopByCategory />
           {/* <TrustedBrands /> */}
           {/* <OffersSection /> */}
