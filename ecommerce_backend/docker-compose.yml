@@ -1,34 +1,36 @@
 version: "3.8"
 
 services:
-  # خدمة الداتابيز
+  # 1️⃣ خدمة قاعدة البيانات (PostgreSQL)
   db:
     image: postgres:15-alpine
     container_name: pg_db
     environment:
-      - POSTGRES_USER=admin
-      - POSTGRES_PASSWORD=sharawy123
-      - POSTGRES_DB=pharmacy_db
+      # سحب البيانات مباشرة من ملف الـ env لضمان التطابق
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data # عشان بيانات الداتابيز متتمسحش أبداً
+      - pgdata:/var/lib/postgresql/data # الحفاظ على البيانات عند إعادة التشغيل
     restart: always
 
-  # خدمة الـ API
+  # 2️⃣ خدمة الباك إند (FastAPI)
   pharmacy-api:
     build: .
     container_name: pharmacy-app
     ports:
-      - "8001:8000" # الباب الخارجي 8001 والداخلي 8000
+      - "8001:8000" # الباب الخارجي للسيرفر 8001
     env_file:
-      - .env.production
+      - .env.production # إجبار الحاوية على قراءة ملف الإنتاج
     depends_on:
-      - db # بيقول للدكر: "متقومش الـ API إلا لما الداتابيز تقوم"
+      - db # ضمان تشغيل الداتابيز أولاً
     restart: always
     volumes:
-      - ./static:/app/static
-      - ./app/.env.production:/app/.env.production # عشان يقرأ الإعدادات صح
+      - ./static:/app/static # لرفع وحفظ الصور
+      - ./ecommerce_backend/.env.production:/app/.env.production # ربط ملف الإعدادات داخل الحاوية
 
+# تعريف وحدات التخزين المستقلة
 volumes:
-  pgdata: # تعريف مساحة تخزين الداتابيز
+  pgdata:
