@@ -22,7 +22,13 @@ class ShortItemNo(Base):
     # العلاقة الجديدة مع جدول الصور
     additional_images = relationship("ProductImage", back_populates="item", cascade="all, delete-orphan")
 
-    products = relationship('Product', back_populates='item_details', cascade="all, delete-orphan")
+    # ضيف الـ primaryjoin هنا كمان عشان الـ Admin Portal يقدر يقرا العلاقة في الاتجاهين
+    products = relationship(
+        'Product', 
+        back_populates='item_details', 
+        cascade="all, delete-orphan",
+        primaryjoin="Product.short_item_no == ShortItemNo.short_item_no" # السطر ده مهم جداً
+    )   
     purchases = relationship('Purchase', back_populates='item_details')
 
     categories = relationship(
@@ -32,4 +38,4 @@ class ShortItemNo(Base):
     )
 
     def __repr__(self):
-        return self.short_item_no
+        return str(self.short_item_no) if self.short_item_no else "New Item"

@@ -7,7 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
  * وهيقرأ .env.production لو حددت وضع الـ production
  */
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-
+console.log(BASE_URL);
 // طباعة بسيطة في الكونسول للتأكد إن الـ IP اللي مسحوب صح (مفيدة جداً في الـ Debugging)
 console.log("🚀 Connecting to Backend at:", BASE_URL);
 
