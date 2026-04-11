@@ -17,7 +17,10 @@ class Purchase(Base):
     purchase_order_no = Column(String(50), unique=True, nullable=False, default=generate_auto_po) 
     date = Column(DateTime, default=datetime.utcnow)
     
-    short_item_id = Column(Integer, ForeignKey('ShortItemNo.id'), nullable=False)
+    # 🔴 التعديل هنا: غيرنا النوع لـ String(40) والربط بالـ Primary Key الجديد
+    short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    
+    # العلاقة بجدول الأصناف
     item_details = relationship('ShortItemNo', back_populates='purchases')
     
     supplier_id = Column(Integer, ForeignKey('Supplier.id'), nullable=True)
@@ -37,4 +40,4 @@ class Purchase(Base):
     trips = relationship("Trip", back_populates="purchase_order")
 
     def __repr__(self):
-        return f"<Purchase(id={self.purchase_id}, po={self.purchase_order_no})>"
+        return f"<Purchase(id={self.purchase_id}, po={self.purchase_order_no}, sku={self.short_item_no})>"

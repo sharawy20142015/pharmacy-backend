@@ -8,6 +8,8 @@ from starlette.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from datetime import datetime
 
+from wtforms import Form, StringField
+from wtforms.validators import DataRequired
 # استيراد المحرك وجلسة قاعدة البيانات
 from app.db.session import async_engine, AsyncSessionLocal
 
@@ -128,16 +130,41 @@ def setup_admin(app, authentication_backend):
                 result = await BulkService.process_excel(content, db)
                 return await self.templates.TemplateResponse(request, "bulk_upload.html", {"result": result})
 
+    # class ShortItemAdmin(ModelView, model=ShortItemNo):
+    #     name_plural = "Catalog (الأصناف)"
+    #     category = "Inventory"
+    #     icon = "fa-solid fa-box-archive"
+    #     column_list = [ShortItemNo.id, ShortItemNo.short_item_no, ShortItemNo.ar_name, "Brand_Name"]
+    #     column_searchable_list = [ShortItemNo.short_item_no, ShortItemNo.ar_name]
+    #     form_columns = ['short_item_no', 'ar_name', 'en_name', 'header', 'sub_header', 'Brand_Name', 'categories', 'description']
+    #     inline_models = [ProductImage, Product] # إضافة صور وأسعار الصنف في نفس الشاشة
+    #     form_args = {"short_item_no": {"default": simple_generate_sku}}
+
+
     class ShortItemAdmin(ModelView, model=ShortItemNo):
         name_plural = "Catalog (الأصناف)"
         category = "Inventory"
         icon = "fa-solid fa-box-archive"
         column_list = [ShortItemNo.id, ShortItemNo.short_item_no, ShortItemNo.ar_name, "Brand_Name"]
         column_searchable_list = [ShortItemNo.short_item_no, ShortItemNo.ar_name]
-        form_columns = ['short_item_no', 'ar_name', 'en_name', 'header', 'sub_header', 'Brand_Name', 'categories', 'description']
-        inline_models = [ProductImage, Product] # إضافة صور وأسعار الصنف في نفس الشاشة
-        form_args = {"short_item_no": {"default": simple_generate_sku}}
+        
+        # ❌ امسح السطر ده لأنه مش شغال في sqladmin
+        # inline_models = [ProductImage, Product] 
 
+        # ✅ ضيف العلاقات في الـ form_columns هنا:
+        form_columns = [
+            'short_item_no', 
+            'ar_name', 
+            'en_name', 
+            'header', 
+            'sub_header', 
+            'Brand_Name', 
+            'categories', 
+            'description',
+            'additional_images', # <--- علاقة الصور
+            'products'           # <--- علاقة المنتجات
+        ]
+        form_args = {"short_item_no": {"default": simple_generate_sku}}
     class CategoryAdmin(ModelView, model=Category):
         name_plural = "Categories (الأقسام)"
         category = "Inventory"
@@ -148,16 +175,62 @@ def setup_admin(app, authentication_backend):
     # ==========================================
     # 4. إدارة الأسعار والتاجات
     # ==========================================
+
+    class ProductBaseForm(Form):
+        # هنا بنبني الحقل بإيدينا غصب عن SQLAdmin
+        short_item_no = StringField("Short Item No", validators=[DataRequired()])
     class ProductAdmin(ModelView, model=Product):
         name_plural = "Product"
         category = "Sales & Pricing"
         icon = "fa-solid fa-tags"
+        
+        # ✅ السطر السحري اللي بيحل المشكلة: بنخليه يعتمد على الفورم اللي عملناه
+        form_base_class = ProductBaseForm
+        
+        # الترتيب بتاعك زي ما هو
+        form_columns = [
+            "short_item_no", 
+            "tags",
+            "slug",
+            "stock_quantity",
+            "price",
+            "discount_value",
+            "discount_percentage",
+            "is_active",
+            "is_featured",
+            "is_new_arrival",
+            "classification"
+        ]
+        
         column_list = [Product.id, "short_item_no", "price", "discount_percentage", "final_price", "stock_quantity"]
         column_searchable_list = ["short_item_no"]
         
         async def on_model_change(self, data, model, is_created, request):
             model.calculate_final_price()
 
+
+
+
+
+
+
+
+
+    class ProductImageAdmin(ModelView, model=ProductImage):
+        name = "Product Image"
+        name_plural = "Product Images (صور المنتجات)"
+        category = "Inventory"
+        icon = "fa-regular fa-image"
+        
+        # الأعمدة اللي هتظهر في الجدول من بره
+        column_list = [ProductImage.id, ProductImage.short_item_no, ProductImage.img_url, ProductImage.is_main]
+        
+        # الحقول اللي هتظهر لما تيجي تضيف صورة جديدة
+        form_columns = ['item', 'img_url', 'is_main', 'alt_text']
+
+
+
+        
     class TagAdmin(ModelView, model=Tag):
         name_plural = "Product Tags"
         category = "Sales & Pricing"
@@ -191,6 +264,7 @@ def setup_admin(app, authentication_backend):
     admin.add_view(CouponAdmin)
     admin.add_view(BulkUploadAdmin)
     admin.add_view(ShortItemAdmin)
+    admin.add_view(ProductImageAdmin)
     admin.add_view(CategoryAdmin)
     admin.add_view(ProductAdmin)
     admin.add_view(TagAdmin)
@@ -675,8 +749,8 @@ class Banner(Base):
 
     # ✅ ضفنا الربط بالـ Category
     # ده اللي هيخلي الـ Dropdown يظهر
-    category_id = Column(Integer, ForeignKey('category.id'), nullable=True)
-    category = relationship("category") 
+    category_id = Column(Integer, ForeignKey('Category.id'), nullable=True)
+    category = relationship("Category") 
 
     # حقول إضافية
     target_screen = Column(String(50), nullable=True, default="Shop") 
@@ -687,32 +761,29 @@ class Banner(Base):
         # عشان لما يظهر في الأدمن يكتب اسم البانر واسم القسم
         cat_name = self.category.name if self.category else "No Category"
         return f"{self.title} - {cat_name}"
-# app/models/Category.py
 from sqlalchemy import Column, String, Integer, Text, ForeignKey, Table
 from sqlalchemy.orm import relationship, backref
 from app.db.base import Base 
 
-# 1. جدول الربط (تأكد إن ForeignKey بتشاور على اسم الجدول في الداتا بيز)
 product_category_association = Table(
     'product_category_link',
     Base.metadata,
-    Column('short_item_id', Integer, ForeignKey('shortitemno.id'), primary_key=True),
-    Column('category_id', Integer, ForeignKey('category.id'), primary_key=True)
+    Column('short_item_id', Integer, ForeignKey('ShortItemNo.id'), primary_key=True),
+    Column('category_id', Integer, ForeignKey('Category.id'), primary_key=True)
 )
 
 class Category(Base):
-    __tablename__ = "category"
+    __tablename__ = "Category"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(100), nullable=False)
     slug = Column(String(100), unique=True, index=True)
-    parent_id = Column(Integer, ForeignKey('category.id'))
+    parent_id = Column(Integer, ForeignKey('Category.id'))
     level = Column(Integer, default=0, index=True)
     img_url = Column(Text, nullable=True)
 
-    # ✅ استعمل اسم الكلاس "ShortItemNo" كـ String عشان تتجنب الـ Table error
     items = relationship(
-        "ShortItemNo", 
+        "ShortItemNo",
         secondary=product_category_association,
         back_populates="categories"
     )
@@ -722,18 +793,21 @@ class Category(Base):
         backref=backref('parent', remote_side=[id]),
         cascade="all, delete"
     )
+
+    def __str__(self):
+        return self.name
 from sqlalchemy import Column, String, ForeignKey, Integer, Text
 from sqlalchemy.orm import relationship
 from app.db.base import Base 
 
 class Classification(Base):
-    __tablename__ = 'classification'
+    __tablename__ = 'Classification'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # الربط بالصنف
-# جوه كلاس Classification
-    short_item_no = Column(String(20), ForeignKey('shortitemno.short_item_no'), nullable=False)    
+    short_item_no = Column(String(20), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    
     # تعديل العلاقة: شلنا back_populates عشان الـ Error يختفي
     item_details = relationship("ShortItemNo")
 
@@ -787,11 +861,11 @@ class Trip(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(DateTime, default=datetime.utcnow)
     
-    short_item_id = Column(Integer, ForeignKey('shortitemno.id'))
-    purchase_id = Column(Integer, ForeignKey('purchase.purchase_id'), nullable=True)
-    sales_id = Column(Integer, ForeignKey('sales.id'), nullable=True)
+    short_item_id = Column(Integer, ForeignKey('ShortItemNo.id'))
+    purchase_id = Column(Integer, ForeignKey('Purchase.purchase_id'), nullable=True)
+    sales_id = Column(Integer, ForeignKey('Sales.id'), nullable=True)
     
-    item_details = relationship("shortitemno")
+    item_details = relationship("ShortItemNo")
     purchase_order = relationship("Purchase", back_populates="trips")
     sales_order = relationship("Sales", back_populates="trips")
     
@@ -815,21 +889,20 @@ from app.models.Tag import product_tags_association
 from app.db.base import Base 
 
 class Product(Base):
-    __tablename__ = 'product'
+    __tablename__ = 'Product'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     slug = Column(String(150), unique=True, index=True, nullable=True) 
 
-    # 1. الربط بجدول shortitemno (السمول)
-    short_item_no = Column(String(40), ForeignKey('shortitemno.short_item_no'), nullable=False, index=True)    
+    # 1. تأكد أن العمود المعرف هنا كـ ForeignKey مطابق تماماً لنوع العمود في جدول ShortItemNo
+    short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False, index=True)
     
-    # 2. التعديل هنا: نستخدم اسم الكلاس "ShortItemNo" كـ String 
-    # ونحدد الـ primaryjoin لضمان الربط بالعمود النصي مش الـ ID
+    # 2. تحديث العلاقة: إضافة foreign_keys و uselist=False إذا كانت علاقة واحد لواحد
     item_details = relationship(
         'ShortItemNo', 
         back_populates='products',
         primaryjoin="Product.short_item_no == ShortItemNo.short_item_no",
-        foreign_keys=[short_item_no]
+        foreign_keys=[short_item_no] # صراحةً نخبر SQLAlchemy بالعمود المستخدم للربط
     )
 
     stock_quantity = Column(Numeric(18, 2), default=0.00, server_default=text("0.00"), index=True) 
@@ -842,15 +915,15 @@ class Product(Base):
     is_active = Column(Boolean, default=True, index=True)
     is_featured = Column(Boolean, default=False)
     is_new_arrival = Column(Boolean, default=False)
-    classification = Column(String(50))
+    classification=Column(String(50))
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # === Proxies ===
     name = association_proxy('item_details', 'ar_name')
     en_name = association_proxy('item_details', 'en_name')
+    # ... بقية الـ proxies
 
-    # ✅ التعديل هنا: استخدام اسم الكلاس "Tag" كـ String
     tags = relationship(
         "Tag",
         secondary=product_tags_association,
@@ -858,16 +931,16 @@ class Product(Base):
     )
 
     def calculate_final_price(self):
-        p = float(self.price or 0)
-        dp = float(self.discount_percentage or 0)
-        dv = float(self.discount_value or 0)
+        p = self.price or 0
+        dp = self.discount_percentage or 0
+        dv = self.discount_value or 0
         
         if dp > 0:
             amt = p * (dp / 100)
         else:
             amt = dv
         
-        self.final_price = max(0.0, p - amt)
+        self.final_price = max(0, p - amt)
         return self.final_price
 
     def __repr__(self):
@@ -882,9 +955,8 @@ class ProductImage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # 1. توحيد الطول ليكون 40 مثل الجدول الرئيسي
-# جوه كلاس ProductImage
-# جوه كلاس ProductImage
-    short_item_no = Column(String(40), ForeignKey('shortitemno.short_item_no'), nullable=False)
+    short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    
     img_url = Column(Text, nullable=False)
     is_main = Column(Boolean, default=False)
     alt_text = Column(String(100), nullable=True)
@@ -896,6 +968,8 @@ class ProductImage(Base):
         primaryjoin="ProductImage.short_item_no == ShortItemNo.short_item_no",
         foreign_keys=[short_item_no] # <--- السطر ده هو اللي هيشيل الـ KeyError
     )
+    def __str__(self):
+        return f"Image: {self.img_url} (SKU: {self.short_item_no})"
 from sqlalchemy import Column, String, ForeignKey, Integer, Numeric, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -909,17 +983,17 @@ def generate_auto_po():
     return f"PO-{now.strftime('%Y%m%d%H%M%S')}-{suffix}"
 
 class Purchase(Base):
-    __tablename__ = 'purchase'
+    __tablename__ = 'Purchase'
     
     purchase_id = Column(Integer, primary_key=True, autoincrement=True)
     purchase_order_no = Column(String(50), unique=True, nullable=False, default=generate_auto_po) 
     date = Column(DateTime, default=datetime.utcnow)
     
-    short_item_id = Column(Integer, ForeignKey('shortitemno.id'), nullable=False)
-    item_details = relationship('shortitemno', back_populates='purchases')
+    short_item_id = Column(Integer, ForeignKey('ShortItemNo.id'), nullable=False)
+    item_details = relationship('ShortItemNo', back_populates='purchases')
     
-    supplier_id = Column(Integer, ForeignKey('supplier.id'), nullable=True)
-    supplier_info = relationship("supplier", back_populates="purchase_orders")
+    supplier_id = Column(Integer, ForeignKey('Supplier.id'), nullable=True)
+    supplier_info = relationship("Supplier", back_populates="purchase_orders")
 
     supplier_code = Column(String(20))
     supplier_name = Column(String(100))
@@ -982,15 +1056,15 @@ class ReturnSales(Base):
     date = Column(DateTime, default=datetime.utcnow)
     
     # ربط بجدول المبيعات (اختياري)
-    sales_id = Column(Integer, ForeignKey('sales.id'), nullable=True)
+    sales_id = Column(Integer, ForeignKey('Sales.id'), nullable=True)
     
     # 👇 التعديل الجوهري هنا: تغيير النوع لـ String والربط بالعمود المخصص
-    short_item_no = Column(String(20), ForeignKey('shortitemno.short_item_no'), nullable=False)
+    short_item_no = Column(String(20), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
     
     # 👇 تحديد الـ primaryjoin لأننا لا نربط بالـ ID (Primary Key)
     item_details = relationship(
-        'shortitemno',
-        primaryjoin="return_sales.short_item_no == shortitemno.short_item_no"
+        'ShortItemNo',
+        primaryjoin="ReturnSales.short_item_no == ShortItemNo.short_item_no"
     )
 
     quantity = Column(Numeric(18, 2), default=0.00)
@@ -1019,16 +1093,16 @@ from datetime import datetime
 from app.db.base import Base 
 
 class Sales(Base):
-    __tablename__ = 'sales'
+    __tablename__ = 'Sales'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     date = Column(DateTime, default=datetime.utcnow)
     
-    product_id = Column(Integer, ForeignKey('product.id'), nullable=False)
-    product = relationship('product', backref='sales_orders')
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False)
+    product = relationship('Product', backref='sales_orders')
     
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
-    customer_info = relationship("customer", back_populates="sales_orders")
+    customer_info = relationship("Customer", back_populates="sales_orders")
 
     quantity = Column(Numeric(18, 2), default=0.00)
     um = Column(String(10))
@@ -1044,22 +1118,20 @@ class Sales(Base):
     
     shipping_fees = Column(Numeric(18, 2), default=0.00)
     
-    trips = relationship("trip", back_populates="sales_order")
+    trips = relationship("Trip", back_populates="sales_order")
 
     def __repr__(self):
         return f"<Sales(id={self.id}, product_id={self.product_id}, qty={self.quantity})>"
 from sqlalchemy import Column, String, Integer, Text
 from sqlalchemy.orm import relationship
 from app.db.base import Base 
-# تأكد أن Import ده بيشاور على مكان جدول الربط اللي في ملف Category
 from app.models.Category import product_category_association
 
 class ShortItemNo(Base):
-    # ✅ اسم الجدول سمول لمطابقة الـ Foreign Keys في الجداول التانية
-    __tablename__ = "shortitemno"
+    __tablename__ = "ShortItemNo"
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    short_item_no = Column(String(40), unique=True, nullable=False, index=True)
+    id = Column(Integer, autoincrement=True)
+    short_item_no = Column(String(40), primary_key=True, unique=True, nullable=False, index=True)
     
     ar_name = Column(String(100), nullable=True)
     en_name = Column(String(100), nullable=True)
@@ -1067,20 +1139,22 @@ class ShortItemNo(Base):
     
     Brand_Name = Column(String(100), nullable=True, index=True)
 
-    # الحقول الإضافية المطلوبة
+    # ✅✅✅ ضيف السطرين دول هنا ضروري ✅✅✅
     header = Column(String(100), nullable=True)      # العنوان الرئيسي
     sub_header = Column(String(100), nullable=True)  # العنوان الفرعي
 
-    # ✅ العلاقة مع الصور: نستخدم اسم الكلاس "ProductImage" كـ String
+    # العلاقة الجديدة مع جدول الصور
     additional_images = relationship("ProductImage", back_populates="item", cascade="all, delete-orphan")
 
-    # ✅ العلاقة مع المنتجات: نستخدم اسم الكلاس "Product" كـ String
-    products = relationship('Product', back_populates='item_details', cascade="all, delete-orphan")
-    # ✅ العلاقة مع المشتريات: نستخدم اسم الكلاس "Purchase" كـ String
+    # ضيف الـ primaryjoin هنا كمان عشان الـ Admin Portal يقدر يقرا العلاقة في الاتجاهين
+    products = relationship(
+        'Product', 
+        back_populates='item_details', 
+        cascade="all, delete-orphan",
+        primaryjoin="Product.short_item_no == ShortItemNo.short_item_no" # السطر ده مهم جداً
+    )   
     purchases = relationship('Purchase', back_populates='item_details')
 
-    # ✅ العلاقة مع الأقسام: نستخدم اسم الكلاس "Category"
-    # دي اللي كانت عاملة NoForeignKeysError لأنها لازم تلاقي "category_id" في جدول الربط
     categories = relationship(
         "Category",
         secondary=product_category_association,
@@ -1088,14 +1162,14 @@ class ShortItemNo(Base):
     )
 
     def __repr__(self):
-        return self.short_item_no
+        return str(self.short_item_no) if self.short_item_no else "New Item"
 from sqlalchemy import Column, String, Integer, Text, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base import Base 
 
 class Supplier(Base):
-    __tablename__ = 'supplier'
+    __tablename__ = 'Supplier'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     supplier_code = Column(String(20), unique=True, nullable=False)
@@ -1108,7 +1182,7 @@ class Supplier(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # العلاقة مع المشتريات: المورد الواحد له فواتير شراء كثيرة
-    purchase_orders = relationship("purchase", back_populates="supplier_info")
+    purchase_orders = relationship("Purchase", back_populates="supplier_info")
     def __repr__(self):
         return f"<Supplier(name={self.supplier_name}, code={self.supplier_code})>"
 # app/models/Tag.py
@@ -1122,7 +1196,7 @@ from app.db.base import Base
 product_tags_association = Table(
     'product_tags_link',
     Base.metadata,
-    Column('product_id', Integer, ForeignKey('product.id'), primary_key=True), # تأكد إن اسم جدول المنتجات عندك Product
+    Column('product_id', Integer, ForeignKey('Product.id'), primary_key=True), # تأكد إن اسم جدول المنتجات عندك Product
     Column('tag_id', Integer, ForeignKey('tags.id'), primary_key=True)
 )
 
@@ -1138,7 +1212,7 @@ class Tag(Base):
 
     # العلاقة العكسية عشان تقدر تجيب كل المنتجات اللي تحت تاج معين
     products = relationship(
-        "product",
+        "Product",
         secondary=product_tags_association,
         back_populates="tags"
     )
@@ -1304,7 +1378,7 @@ class Warehouse(Base):
     __tablename__ = 'warehouse'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    product_id = Column(Integer, ForeignKey('product.id'), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False, index=True)
     product = relationship('Product', backref='warehouse_records')
 
     transaction_type = Column(Enum(TransactionType), nullable=False, index=True)
@@ -1915,14 +1989,12 @@ class OrderStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 class Order(Base):
-    # ✅ تم التغيير لـ lowercase
-    __tablename__ = 'orders'
+    __tablename__ = 'Orders'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    order_number = Column(String(50), unique=True, index=True)
+    order_number = Column(String(50), unique=True, index=True) # تم التوسيع لـ 50
     date = Column(DateTime, default=datetime.utcnow)
     
-    # ✅ التأكد من الربط بجدول customers (سمول)
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=True)
     customer_info = relationship("Customer", back_populates="orders")
 
@@ -1939,9 +2011,9 @@ class Order(Base):
     shipping_fees = Column(Numeric(18, 2), default=0.00)
     coupon_discount = Column(Numeric(18, 2), default=0.00) 
     
-    # حقول نظام الولاء
-    points_discount = Column(Numeric(18, 2), default=0.00)
-    used_points = Column(Integer, default=0) 
+    # 👇 الحقول الجديدة الخاصة بخصم النقاط (Loyalty System) 👇
+    points_discount = Column(Numeric(18, 2), default=0.00) # القيمة المالية المخصومة مقابل النقاط
+    used_points = Column(Integer, default=0)               # عدد النقاط التي تم سحبها من العميل
     
     total_final_amount = Column(Numeric(18, 2), default=0.00) 
 
@@ -1950,23 +2022,15 @@ class Order(Base):
     is_paid = Column(Boolean, default=False)
 
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
-    
-    # ✅ التأكد من الربط بجدول coupons (سمول)
     coupon_id = Column(Integer, ForeignKey('coupons.id'), nullable=True)
 
 
 class OrderItem(Base):
-    # ✅ تم التغيير لـ lowercase
-    __tablename__ = 'order_items'
+    __tablename__ = 'OrderItems'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    # 🚨 التعديل السحري هنا: تم تغيير Orders.id لـ orders.id
-    order_id = Column(Integer, ForeignKey('orders.id'), nullable=False)
-    
-    # 🚨 التعديل السحري هنا: تم تغيير Product.id لـ product.id 
-    # (تأكد أن __tablename__ في ملف المنتج هو 'product')
-    product_id = Column(Integer, ForeignKey('product.id'), nullable=False)
+    order_id = Column(Integer, ForeignKey('Orders.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey('Product.id'), nullable=False)
     
     quantity = Column(Numeric(18, 2), nullable=False)
     unit_price = Column(Numeric(18, 2), nullable=False) 
@@ -1974,6 +2038,14 @@ class OrderItem(Base):
 
     order = relationship("Order", back_populates="items")
     product = relationship("Product")
+
+
+
+
+
+
+
+
 # E:\Sharawy\PharmacyApp\ecommerce_backend\app\modules\orders\router.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
