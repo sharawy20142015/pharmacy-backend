@@ -130,15 +130,52 @@ def setup_admin(app, authentication_backend):
                 result = await BulkService.process_excel(content, db)
                 return await self.templates.TemplateResponse(request, "bulk_upload.html", {"result": result})
 
+    # class ShortItemAdmin(ModelView, model=ShortItemNo):
+    #     name_plural = "Catalog (الأصناف)"
+    #     category = "Inventory"
+    #     icon = "fa-solid fa-box-archive"
+    #     column_list = [ShortItemNo.id, ShortItemNo.short_item_no, ShortItemNo.ar_name, "Brand_Name"]
+    #     column_searchable_list = [ShortItemNo.short_item_no, ShortItemNo.ar_name]
+    #     form_columns = ['short_item_no', 'ar_name', 'en_name', 'header', 'sub_header', 'Brand_Name', 'categories', 'description']
+    #     inline_models = [ProductImage, Product] # إضافة صور وأسعار الصنف في نفس الشاشة
+    #     form_args = {"short_item_no": {"default": simple_generate_sku}}
+
     class ShortItemAdmin(ModelView, model=ShortItemNo):
         name_plural = "Catalog (الأصناف)"
         category = "Inventory"
         icon = "fa-solid fa-box-archive"
-        column_list = [ShortItemNo.id, ShortItemNo.short_item_no, ShortItemNo.ar_name, "Brand_Name"]
-        column_searchable_list = [ShortItemNo.short_item_no, ShortItemNo.ar_name]
-        form_columns = ['short_item_no', 'ar_name', 'en_name', 'header', 'sub_header', 'Brand_Name', 'categories', 'description']
-        inline_models = [ProductImage, Product] # إضافة صور وأسعار الصنف في نفس الشاشة
-        form_args = {"short_item_no": {"default": simple_generate_sku}}
+        
+        # إظهار الـ SKU كأول عمود
+        column_list = [ShortItemNo.short_item_no, ShortItemNo.ar_name, "Brand_Name"]
+        
+        # إظهار الـ SKU في الإضافة (بما إنه PK لازم نستخدم السطر ده)
+        form_include_pk = True
+
+        form_columns = [
+            'short_item_no', 
+            'ar_name', 
+            'en_name', 
+            'header', 
+            'sub_header', 
+            'Brand_Name', 
+            'categories', 
+            'description',
+            'additional_images',
+            'products'
+        ]
+
+        form_args = {
+            "short_item_no": {
+                "default": simple_generate_sku,
+                "label": "الكود المختصر (SKU)"
+            }
+        }
+
+
+
+
+
+
 
     class CategoryAdmin(ModelView, model=Category):
         name_plural = "Categories (الأقسام)"
@@ -151,47 +188,69 @@ def setup_admin(app, authentication_backend):
     # 4. إدارة الأسعار والتاجات
     # ==========================================
 
-    class ProductBaseForm(Form):
-        # هنا بنبني الحقل بإيدينا غصب عن SQLAdmin
-        short_item_no = StringField("Short Item No", validators=[DataRequired()])
     class ProductAdmin(ModelView, model=Product):
-        name_plural = "Product"
-        category = "Sales & Pricing"
+        name_plural = "Prices & Stock (الأسعار والمخزون)"
+        category = "Inventory"
         icon = "fa-solid fa-tags"
         
-        # ✅ السطر السحري اللي بيحل المشكلة: بنخليه يعتمد على الفورم اللي عملناه
-        form_base_class = ProductBaseForm
-        
-        # الترتيب بتاعك زي ما هو
-        form_columns = [
-            "short_item_no", 
-            "tags",
-            "slug",
-            "stock_quantity",
+        column_list = [
+            "id",
+            "short_item_no",
+            "item_details.ar_name",
             "price",
-            "discount_value",
-            "discount_percentage",
-            "is_active",
-            "is_featured",
-            "is_new_arrival",
-            "classification"
+            "final_price",
+            "stock_quantity",
+            "is_active"
         ]
         
-        column_list = [Product.id, "short_item_no", "price", "discount_percentage", "final_price", "stock_quantity"]
-        column_searchable_list = ["short_item_no"]
+        # البحث - خليه نصوص (Strings) ده شغال تمام ومفيهوش مشكلة
+        column_searchable_list = ["short_item_no", "item_details.ar_name"]
         
-        async def on_model_change(self, data, model, is_created, request):
-            model.calculate_final_price()
+        # 🔴 التعديل هنا: نستخدم كائنات العمود مباشرة من كلاس Product
+        # SQLAdmin بيحتاج دي عشان يقرأ الـ metadata بتاع العمود
+        # column_filters = [
+        #     Product.is_active, 
+        #     Product.classification,
+        #     Product.short_item_no
+        # ]
+
+        form_columns = [
+            'item_details',
+            'price',
+            'discount_percentage',
+            'discount_value',
+            'final_price',
+            'stock_quantity',
+            'classification',
+            'is_active',
+            'is_featured',
+            'is_new_arrival',
+            'tags'
+        ]
+
+        column_labels = {
+            "id": "معرف",
+            "short_item_no": "كود الصنف (SKU)",
+            "item_details.ar_name": "اسم المنتج",
+            "price": "السعر الأساسي",
+            "final_price": "السعر النهائي",
+            "stock_quantity": "الكمية",
+            "is_active": "نشط"
+        }
 
 
 
-
-
-
-
-
-
-
+    class ProductImageAdmin(ModelView, model=ProductImage):
+        name = "Product Image"
+        name_plural = "Product Images (صور المنتجات)"
+        category = "Inventory"
+        icon = "fa-regular fa-image"
+        
+        # الأعمدة اللي هتظهر في الجدول من بره
+        column_list = [ProductImage.id, ProductImage.short_item_no, ProductImage.img_url, ProductImage.is_main]
+        
+        # الحقول اللي هتظهر لما تيجي تضيف صورة جديدة
+        form_columns = ['item', 'img_url', 'is_main', 'alt_text']
 
 
 
@@ -229,6 +288,7 @@ def setup_admin(app, authentication_backend):
     admin.add_view(CouponAdmin)
     admin.add_view(BulkUploadAdmin)
     admin.add_view(ShortItemAdmin)
+    admin.add_view(ProductImageAdmin)
     admin.add_view(CategoryAdmin)
     admin.add_view(ProductAdmin)
     admin.add_view(TagAdmin)

@@ -7,17 +7,25 @@ class ProductImage(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     
-    # 1. توحيد الطول ليكون 40 مثل الجدول الرئيسي
+    # 1. الربط مباشرة بالـ Primary Key الجديد (short_item_no) بطول 40
+    # النوع والطول لازم يكونوا متطابقين تماماً مع الجدول الرئيسي لتجنب إيرور الـ SQL Server
     short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
     
     img_url = Column(Text, nullable=False)
     is_main = Column(Boolean, default=False)
     alt_text = Column(String(100), nullable=True)
 
-    # 2. إضافة foreign_keys هنا أيضاً ضروري جداً للـ sqladmin
+    # 2. العلاقة أصبحت مباشرة وبسيطة (Standard Relationship)
+    # sqladmin هيفهمها لوحده ومش هيطلع KeyError لأن الربط بالـ PK الفعلي
     item = relationship(
         "ShortItemNo", 
-        back_populates="additional_images",
-        primaryjoin="ProductImage.short_item_no == ShortItemNo.short_item_no",
-        foreign_keys=[short_item_no] # <--- السطر ده هو اللي هيشيل الـ KeyError
+        back_populates="additional_images"
     )
+
+    def __str__(self):
+        # دي بتخلي الصورة تظهر بشكل نظيف في لوحة التحكم (اسم الصنف + الرابط)
+        status = "Main" if self.is_main else "Extra"
+        return f"[{status}] {self.short_item_no} - {self.img_url[:30]}..."
+
+    def __repr__(self):
+        return f"<ProductImage(sku={self.short_item_no}, is_main={self.is_main})>"
