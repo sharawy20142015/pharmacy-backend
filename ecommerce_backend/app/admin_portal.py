@@ -8,6 +8,8 @@ from starlette.responses import RedirectResponse, StreamingResponse
 from sqlalchemy import select
 from datetime import datetime
 
+from wtforms import Form, StringField
+from wtforms.validators import DataRequired
 # استيراد المحرك وجلسة قاعدة البيانات
 from app.db.session import async_engine, AsyncSessionLocal
 
@@ -148,16 +150,52 @@ def setup_admin(app, authentication_backend):
     # ==========================================
     # 4. إدارة الأسعار والتاجات
     # ==========================================
+
+    class ProductBaseForm(Form):
+        # هنا بنبني الحقل بإيدينا غصب عن SQLAdmin
+        short_item_no = StringField("Short Item No", validators=[DataRequired()])
     class ProductAdmin(ModelView, model=Product):
         name_plural = "Product"
         category = "Sales & Pricing"
         icon = "fa-solid fa-tags"
+        
+        # ✅ السطر السحري اللي بيحل المشكلة: بنخليه يعتمد على الفورم اللي عملناه
+        form_base_class = ProductBaseForm
+        
+        # الترتيب بتاعك زي ما هو
+        form_columns = [
+            "short_item_no", 
+            "tags",
+            "slug",
+            "stock_quantity",
+            "price",
+            "discount_value",
+            "discount_percentage",
+            "is_active",
+            "is_featured",
+            "is_new_arrival",
+            "classification"
+        ]
+        
         column_list = [Product.id, "short_item_no", "price", "discount_percentage", "final_price", "stock_quantity"]
         column_searchable_list = ["short_item_no"]
         
         async def on_model_change(self, data, model, is_created, request):
             model.calculate_final_price()
 
+
+
+
+
+
+
+
+
+
+
+
+
+        
     class TagAdmin(ModelView, model=Tag):
         name_plural = "Product Tags"
         category = "Sales & Pricing"
