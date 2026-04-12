@@ -4,6 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import List
 
+# 🟢 استيراد أداة الكاش
+from fastapi_cache.decorator import cache
+
 from app.db.session import get_db
 from app.models.Category import Category
 from app.schemas.Category.Category import CategoryRead, CategoryWithSub
@@ -19,8 +22,9 @@ router = APIRouter(
     tags=["Product Categories"]
 )
 
-# 1️⃣ جلب جميع الأقسام الرئيسية (Level 0) مع أقسامها الفرعية (للفئات اللي ليها منتجات مفعلة فقط)
+# 1️⃣ جلب جميع الأقسام الرئيسية (Level 0) مع أقسامها الفرعية
 @router.get("/", response_model=List[CategoryWithSub])
+@cache(expire=300) # 🟢 كاش لمدة 5 دقائق لتقليل الضغط على الداتا بييز
 async def get_main_categories(db: AsyncSession = Depends(get_db)):
     """
     جلب قائمة بالأقسام الرئيسية (Level 0) مع تحميل الأقسام الفرعية التابعة لها.
@@ -43,6 +47,7 @@ async def get_main_categories(db: AsyncSession = Depends(get_db)):
 
 # 2️⃣ جلب الأقسام الفرعية لقسم معين بواسطة الـ ID
 @router.get("/{parent_id}/subcategories", response_model=List[CategoryRead])
+@cache(expire=300) # 🟢 كاش
 async def get_subcategories(parent_id: int, db: AsyncSession = Depends(get_db)):
     """
     جلب الأقسام الفرعية التابعة لقسم معين.
@@ -53,6 +58,7 @@ async def get_subcategories(parent_id: int, db: AsyncSession = Depends(get_db)):
 
 # 3️⃣ جلب تفاصيل قسم واحد بالـ Slug
 @router.get("/by-slug/{slug}", response_model=CategoryWithSub)
+@cache(expire=300) # 🟢 كاش
 async def get_category_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
     query = select(Category).options(
         selectinload(Category.sub_categories)
@@ -70,6 +76,7 @@ async def get_category_by_slug(slug: str, db: AsyncSession = Depends(get_db)):
 
 # 4️⃣ جلب جميع المنتجات التابعة لقسم معين بدون Limit
 @router.get("/{slug}/products", response_model=List[ProductShopRead])
+@cache(expire=120) # 🟢 كاش لمدة دقيقتين (عشان المنتجات بتتغير أسرع من الأقسام)
 async def get_category_products(
     slug: str, 
     db: AsyncSession = Depends(get_db),
@@ -131,10 +138,9 @@ async def get_category_products(
 
     return final_list
 
-
-
 # 🌟 مسار جديد لجلب الفئات الفرعية (Level 1) للصفحة الرئيسية
 @router.get("/level-1")
+@cache(expire=300) # 🟢 كاش لمدة 5 دقائق (أهم مسار بيحمل في الهوم بيدج)
 async def get_level_1_categories(db: AsyncSession = Depends(get_db)):
     """
     جلب الفئات اللي الـ Level بتاعها 1، 
