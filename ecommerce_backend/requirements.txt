@@ -29,3 +29,5 @@ google-auth==2.27.0
 python-slugify==8.0.4
 typing-extensions==4.9.0
 requests==2.31.0
+fastapi-cache2==0.2.1
+redis==5.0.1
