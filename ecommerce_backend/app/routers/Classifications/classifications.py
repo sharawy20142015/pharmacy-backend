@@ -4,6 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import List
 
+# 🟢 استيراد أداة الكاش
+from fastapi_cache.decorator import cache
+
 from app.db.session import get_db
 from app.models.product import Product
 from app.models.ProductImage import ProductImage 
@@ -15,6 +18,7 @@ router = APIRouter(
 )
 
 @router.get("/products", response_model=List[ProductShopRead])
+@cache(expire=120) # 🟢 كاش لمدة دقيقتين لتخفيف الضغط مع سرعة تحديث العروض
 async def get_products_by_classification(
     type: str = Query(..., description="Type: 'New Arrivals' or 'Offer'"),
     limit: int = 10,

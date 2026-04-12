@@ -8,6 +8,10 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+# --- 🟢 استيراد مكتبات الكاش الجديدة ---
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
+
 # --- استيراد أدوات قاعدة البيانات ---
 from app.db.base import Base  # تأكد أن هذا الملف يستورد كل الموديلات
 from app.db.session import async_engine
@@ -37,6 +41,10 @@ async def lifespan(app: FastAPI):
     # --- كود التشغيل (Startup) ---
     print("---------------------------------------")
     print("🚀 Sharawy Pharmacy System Starting...")
+    
+    # 🟢 تهيئة نظام الكاش في بداية التشغيل
+    FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
+    print("✅ Cache System Initialized")
     
     # الخطوة الحاسمة: إنشاء الجداول في قاعدة البيانات إذا لم تكن موجودة
     try:
