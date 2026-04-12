@@ -4,6 +4,9 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 
+# 🟢 استيراد أداة الكاش
+from fastapi_cache.decorator import cache
+
 # استدعي الملفات بتاعتك هنا بناءً على مسارات مشروعك
 from app.db.session import get_db
 from app.models import Product, ShortItemNo, Category
@@ -16,6 +19,7 @@ router = APIRouter(
 
 # 🟢 1. جلب كل البراندات المتاحة للمنتجات اللي ليها مخزون فقط
 @router.get("/brands", response_model=List[str])
+@cache(expire=3600) # كاش لمدة ساعة لأن البراندات نادراً ما تتغير
 async def get_active_brands(db: AsyncSession = Depends(get_db)):
     """
     جلب أسماء البراندات للمنتجات المفعلة والتي تحتوي على مخزون فقط.
@@ -38,6 +42,7 @@ async def get_active_brands(db: AsyncSession = Depends(get_db)):
 
 # --- 2. جلب الواصل حديثاً (المتوفر فقط) ---
 @router.get("/new-arrivals", response_model=List[ProductShopRead])
+@cache(expire=300) # كاش لمدة 5 دقائق للصفحة الرئيسية
 async def get_new_arrivals(
     limit: int = Query(default=10, ge=1),
     offset: int = Query(default=0, ge=0),
@@ -50,7 +55,7 @@ async def get_new_arrivals(
             selectinload(Product.item_details).selectinload(ShortItemNo.additional_images) 
         )
         .where(
-            Product.is_new_arrival == '1', 
+            Product.is_new_arrival == True, # تم التصحيح من '1' إلى True
             Product.is_active == True,
             Product.stock_quantity > 0 # 👈 إخفاء المنتجات اللي رصيدها صفر
         )
@@ -70,13 +75,17 @@ async def get_search_suggestions(
     query: str = Query(..., min_length=1),
     db: AsyncSession = Depends(get_db)
 ):
+    # 🟢 تحسين البحث باستخدام Prefix Search بدلاً من Full Table Scan
+    search_term = query.strip()
+    
     stmt = (
         select(ShortItemNo.en_name, ShortItemNo.ar_name, Product.id)
         .join(Product.item_details)
         .where(
             or_(
-                ShortItemNo.en_name.ilike(f"%{query}%"),
-                ShortItemNo.ar_name.ilike(f"%{query}%")
+                ShortItemNo.en_name.ilike(f"{search_term}%"), # بحث سريع
+                ShortItemNo.ar_name.ilike(f"{search_term}%"),
+                ShortItemNo.Brand_Name.ilike(f"{search_term}%")
             ),
             Product.is_active == True,
             Product.stock_quantity > 0 # 👈 عشان متبقاش الاقتراحات لمنتجات مش موجودة
@@ -93,6 +102,7 @@ async def get_search_suggestions(
 
 # --- 4. جلب قائمة المنتجات العامة (المتوفرة فقط) ---
 @router.get("/")
+# 🔴 لا نضع كاش هنا لأن المستخدمين يبحثون بمتغيرات مختلفة باستمرار
 async def list_products(
     category_slug: Optional[str] = None,
     search: Optional[str] = None,
@@ -113,16 +123,19 @@ async def list_products(
     )
 
     if search:
-        search_term = f"%{search}%"
+        search_term = search.strip()
+        # 🟢 الحل الجذري لمشكلة الـ 100 يوزر: Full Text Search + Prefix Search
         base_query = base_query.where(
             or_(
-                ShortItemNo.ar_name.ilike(search_term),
-                ShortItemNo.en_name.ilike(search_term),
-                ShortItemNo.Brand_Name.ilike(search_term),
-                ShortItemNo.description.ilike(search_term),
-                ShortItemNo.header.ilike(search_term),
-                ShortItemNo.sub_header.ilike(search_term),
-                ShortItemNo.short_item_no.ilike(search_term)
+                # 1. بحث سريع في الأسماء والماركة (Index Friendly)
+                ShortItemNo.ar_name.ilike(f"{search_term}%"),
+                ShortItemNo.en_name.ilike(f"{search_term}%"),
+                ShortItemNo.Brand_Name.ilike(f"{search_term}%"),
+                ShortItemNo.short_item_no == search_term,
+                
+                # 2. بحث قوي في النصوص الطويلة (يتطلب إعداد GIN Index في الداتا بييز)
+                func.to_tsvector('arabic', func.coalesce(ShortItemNo.description, '')).op('@@')(func.plainto_tsquery('arabic', search_term)),
+                func.to_tsvector('english', func.coalesce(ShortItemNo.description, '')).op('@@')(func.plainto_tsquery('english', search_term))
             )
         )
 
@@ -165,6 +178,7 @@ async def list_products(
 # --- 5. جلب تفاصيل منتج واحد (ID) ---
 # هنا بنسمح بعرض المنتج حتى لو صفر عشان لو العميل دخل من لينك قديم يظهرله "نفذت الكمية"
 @router.get("/{product_id}", response_model=ProductShopRead)
+@cache(expire=60) # كاش سريع لمدة دقيقة لتخفيف الضغط لو فيه منتج تريند
 async def get_product_details(product_id: int, db: AsyncSession = Depends(get_db)):
     query = (
         select(Product)
