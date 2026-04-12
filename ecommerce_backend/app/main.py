@@ -1,5 +1,5 @@
-﻿# E:\Sharawy\PharmacyApp\ecommerce_backend\app\main.py
-
+﻿# app/main.py
+import os
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from sqladmin.authentication import AuthenticationBackend
@@ -8,7 +8,11 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# 1. استيراد الراوترز (تأكد من استخدام النسخة التي في modules)
+# --- استيراد أدوات قاعدة البيانات ---
+from app.db.base import Base  # تأكد أن هذا الملف يستورد كل الموديلات
+from app.db.session import async_engine
+
+# 1. استيراد الراوترز
 from app.modules.orders import router as order_router 
 from app.routers.Auth import Auth 
 from app.routers.Banner import banner 
@@ -18,6 +22,8 @@ from app.routers.Product import product
 from app.routers.Classifications import classifications
 from app.modules.shipping import router as shipping_router 
 from app.modules.identity import router as customer_point
+# 👈 إضافة راوتر طلبات الأدوية النواقص
+from app.modules.requestproduct import router as requestproduct_router 
 
 # 2. استيراد وظائف الـ Seeding التلقائي
 from app.modules.shipping.seed import auto_seed_shipping
@@ -32,6 +38,16 @@ async def lifespan(app: FastAPI):
     print("---------------------------------------")
     print("🚀 Sharawy Pharmacy System Starting...")
     
+    # الخطوة الحاسمة: إنشاء الجداول في قاعدة البيانات إذا لم تكن موجودة
+    try:
+        print("🏗️  Checking Database Schema...")
+        async with async_engine.begin() as conn:
+            # هذا السطر يقرأ كل الـ Classes المربوطة بـ Base وينشئها كجداول
+            await conn.run_sync(Base.metadata.create_all)
+        print("✅ Database Schema: Ready")
+    except Exception as e:
+        print(f"❌ Critical Error during Schema creation: {e}")
+
     # تنفيذ إضافة بيانات الشحن تلقائياً
     try:
         await auto_seed_shipping()
@@ -59,6 +75,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# --- سحب الإعدادات من الـ Environment Variables ---
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback_secret_key_67890")
+ADMIN_USER = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASSWORD", "sharawy123")
+
 # --- Middlewares ---
 app.add_middleware(
     CORSMiddleware,
@@ -67,13 +88,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key="SHARAWY_SECRET_KEY_123")
+# استخدام الـ Secret Key من الـ env للسيشن
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # --- Static Files ---
+# تأكد من وجود مجلد باسم static في مجلد المشروع الرئيسي
+if not os.path.exists("static"):
+    os.makedirs("static")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # --- تسجيل الراوترز ---
-# تم حذف أي include_router قديم لـ Order لضمان عدم التكرار
 app.include_router(order_router.router) 
 app.include_router(Auth.router) 
 app.include_router(banner.router)
@@ -83,12 +107,16 @@ app.include_router(offers.router)
 app.include_router(classifications.router)
 app.include_router(shipping_router.router) 
 app.include_router(customer_point.router) 
+# 👈 تسجيل راوتر طلبات الأدوية النواقص هنا
+app.include_router(requestproduct_router.router) 
 
 # --- إعداد نظام حماية لوحة التحكم (Admin Auth) ---
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
         form = await request.form()
-        if form.get("username") == "admin" and form.get("password") == "sharawy123":
+        
+        # المقارنة مع القيم المسحوبة من الـ env
+        if form.get("username") == ADMIN_USER and form.get("password") == ADMIN_PASS:
             request.session.update({"token": "admin_access_granted"})
             return True
         return False
@@ -100,7 +128,8 @@ class AdminAuth(AuthenticationBackend):
     async def authenticate(self, request: Request) -> bool:
         return request.session.get("token") == "admin_access_granted"
 
-setup_admin(app, AdminAuth(secret_key="SHARAWY_SECRET_KEY_123"))
+# تمرير الـ Secret Key المسحوب من الـ env أيضاً هنا لوحة التحكم
+setup_admin(app, AdminAuth(secret_key=SECRET_KEY))
 
 @app.get('/')
 async def root():

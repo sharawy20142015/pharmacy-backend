@@ -12,21 +12,23 @@ class ReturnSales(Base):
     # ربط بجدول المبيعات (اختياري)
     sales_id = Column(Integer, ForeignKey('Sales.id'), nullable=True)
     
-    # 👇 التعديل الجوهري هنا: تغيير النوع لـ String والربط بالعمود المخصص
-    short_item_no = Column(String(20), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
+    # 🔴 التعديل هنا: تم تغيير الطول لـ 40 ليتطابق مع ShortItemNo الجديد
+    # والربط الآن بـ ForeignKey مباشر على الـ Primary Key (short_item_no)
+    short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False)
     
-    # 👇 تحديد الـ primaryjoin لأننا لا نربط بالـ ID (Primary Key)
+    # ✅ العلاقة أصبحت مباشرة (Standard Relationship)
+    # شلنا الـ primaryjoin اليدوي لأن الربط أصبح بالـ PK الفعلي لجدول ShortItemNo
     item_details = relationship(
         'ShortItemNo',
-        primaryjoin="ReturnSales.short_item_no == ShortItemNo.short_item_no"
+        back_populates='return_sales'
     )
 
     quantity = Column(Numeric(18, 2), default=0.00)
-    um = Column(String(10))
+    um = Column(String(10)) # وحدة القياس (Unit of Measure)
     unit_price = Column(Numeric(18, 2), default=0.00)
     extended_price = Column(Numeric(18, 2), default=0.00)
     
-    # بيانات العميل
+    # بيانات العميل (Snapshot لحالة العميل وقت المرتجع)
     customer_code = Column(String(20))
     customer_name = Column(String(100))
     customer_governates = Column(String(50))
@@ -39,5 +41,7 @@ class ReturnSales(Base):
     reason_for_return = Column(Text) 
 
     def __repr__(self):
-        # تحديث الـ repr ليعرض الكود النصي بدل الـ id
         return f"<ReturnSales(id={self.id}, item_no={self.short_item_no}, qty={self.quantity})>"
+
+    def __str__(self):
+        return f"Return: {self.short_item_no} - Qty: {self.quantity}"

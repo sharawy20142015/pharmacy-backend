@@ -21,3 +21,4 @@ from app.models.Return_Sales import ReturnSales
 from app.models.Banner import Banner
 from app.modules.orders.models import *
 from app.modules.shipping.models import *
+from app.modules.requestproduct.models import *

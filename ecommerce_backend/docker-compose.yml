@@ -1,13 +1,38 @@
 version: "3.8"
 
 services:
-  api:
-    build: .
-    container_name: pharmacy_backend
-    ports:
-      - "8004:8000" # بنربط بورت 8004 اللي إنت شغال بيه ببورت 8000 جوه الدوكر
+  # 1️⃣ خدمة قاعدة البيانات (PostgreSQL)
+  db:
+    image: postgres:15-alpine
+    container_name: pg_db
     env_file:
-      - .env
+      - .env.production # خليه يقرأ اليوزر والباسورد واسم الداتا بيز من هنا مباشرة
+    environment:
+      # السطر ده هو "السحر" اللي بيكريت الداتا بيز أوتوماتيك أول ما الدوكر يقوم
+      - POSTGRES_DB=${DB_NAME}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+
+  # 2️⃣ خدمة الباك إند (FastAPI)
+  pharmacy-api:
+    build: .
+    container_name: pharmacy-app
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env.production
+    depends_on:
+      - db
     restart: always
     volumes:
-      - .:/app # عشان لو عدلت في الكود يسمع فوراً وإنت بتعمل تيست
+      - ./static:/app/static
+      # ملاحظة: لو الملفات موجودة في نفس المجلد، السطر ده كفاية
+      - ./.env.production:/app/.env.production
+
+volumes:
+  pgdata:
