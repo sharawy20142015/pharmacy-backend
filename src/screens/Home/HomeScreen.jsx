@@ -78,7 +78,7 @@ const HomeScreen = () => {
       </ScrollView>
 
       {/* زرار الاستشارة العائم */}
-      <FloatingButton />
+      {/* <FloatingButton /> */}
     </SafeAreaView>
   );
 };

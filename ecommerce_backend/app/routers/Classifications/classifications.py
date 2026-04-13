@@ -34,7 +34,7 @@ async def get_products_by_classification(
             select(Product, ProductImage.img_url)
             .join(
                 ProductImage, 
-                (Product.short_item_no == ProductImage.short_item_no) & (ProductImage.is_main == 1), 
+                (Product.short_item_no == ProductImage.short_item_no) & (ProductImage.is_main == True), 
                 isouter=True
             )
             .options(selectinload(Product.item_details)) 
@@ -42,7 +42,7 @@ async def get_products_by_classification(
 
         # 2. فلترة ذكية للصفحة الرئيسية
         if type == "New Arrivals":
-            query = query.where((Product.classification == type) | (Product.is_new_arrival == 1))
+            query = query.where((Product.classification == type) | (Product.is_new_arrival == True))
         else:
             query = query.where(Product.classification == type)
             
