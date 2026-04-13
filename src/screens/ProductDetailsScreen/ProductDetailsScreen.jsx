@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Image,
   useWindowDimensions,
-  ActivityIndicator,
   Platform,
   Pressable,
 } from "react-native";
@@ -18,16 +17,23 @@ import { productService } from "../../services/productService";
 import { useCart } from "../../context/CartContext";
 import Footer from "../../components/UI/Footer/Footer";
 
+// 🚀 1. استيراد كونتكست التحميل وشاشة اللوجو
+import { useLoading } from "../../context/LoadingContext";
+import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
+
 const ProductDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { productId } = route.params || {};
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
-  const isMobile = width < 768; // ضفنا فحص الموبايل عشان نتحكم في حجم الصورة
+  const isMobile = width < 768;
+
+  // 🚀 2. استخدام دوال التحميل
+  const { showLoading, hideLoading } = useLoading();
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   const [product, setProduct] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [relatedProducts, setRelatedProducts] = useState([]);
@@ -53,11 +59,12 @@ const ProductDetailsScreen = () => {
     }
   };
 
+  // 🚀 3. جلب تفاصيل المنتج والمنتجات ذات الصلة
   useEffect(() => {
     const getDetails = async () => {
       if (!productId) return;
       try {
-        setLoading(true);
+        showLoading(); // إظهار شاشة نبض
         const responseData = await productService.getProductById(productId);
 
         if (responseData) {
@@ -72,21 +79,23 @@ const ProductDetailsScreen = () => {
             setRelatedProducts(filteredRelated);
           }
         }
+
+        // إعطاء وقت صغير جداً للمتصفح عشان يرسم الصور في الخلفية
+        await new Promise((resolve) => setTimeout(resolve, 150));
       } catch (error) {
         console.error("Fetch Error:", error);
       } finally {
-        setLoading(false);
+        setIsFirstLoad(false); // فك القفل السحري
+        hideLoading(); // إخفاء الشاشة
       }
     };
     getDetails();
   }, [productId]);
 
-  if (loading)
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#11b67f" />
-      </View>
-    );
+  // 🚀 4. عرض شاشة التحميل الفخمة بدل السبينر العادي
+  if (isFirstLoad) {
+    return <LoadingScreen />;
+  }
 
   if (!product) return null;
 
@@ -138,13 +147,11 @@ const ProductDetailsScreen = () => {
               <Pressable style={styles.imageBox}>
                 {({ hovered }) => (
                   <View style={styles.img3DWrapper}>
-                    {/* الصورة الأساسية مع تعديل الحجم للموبايل */}
                     <Image
                       source={{ uri: mainImage }}
                       style={[
                         styles.mainImg,
-                        isMobile && styles.mainImgMobile, // تكبير الصورة في الموبايل
-                        // تأثير الـ 3D بيشتغل بس لو مش موبايل (عشان اللمس ميعملش حركة مزعجة)
+                        isMobile && styles.mainImgMobile,
                         hovered &&
                           !isMobile && {
                             transform: [
@@ -161,11 +168,10 @@ const ProductDetailsScreen = () => {
                       resizeMode="contain"
                     />
 
-                    {/* الظل الأرضي */}
                     <View
                       style={[
                         styles.productFloorShadow,
-                        isMobile && styles.productFloorShadowMobile, // تكبير الظل في الموبايل
+                        isMobile && styles.productFloorShadowMobile,
                         hovered &&
                           !isMobile && {
                             transform: [{ scaleX: 0.6 }],
