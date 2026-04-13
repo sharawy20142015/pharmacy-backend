@@ -5,9 +5,9 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   useWindowDimensions,
   ActivityIndicator,
+  FlatList, // 👇 1. استيراد FlatList
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./SkinCareSection.styles";
@@ -73,18 +73,18 @@ const SkinCareSection = () => {
         </TouchableOpacity>
       </View>
 
-      {/* سكرول المنتجات الأفقي */}
-      <ScrollView
+      {/* 👇 2. استخدام FlatList بدلاً من ScrollView */}
+      <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
+        data={products}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={[
           styles.scrollContainer,
           isDesktop && { paddingBottom: 20 },
         ]}
-      >
-        {products.map((item) => (
+        renderItem={({ item }) => (
           <View
-            key={item.id}
             style={{
               // العرض متناسق مع اللي في الصورة
               width: isDesktop ? 240 : 180,
@@ -103,8 +103,8 @@ const SkinCareSection = () => {
               }}
             />
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 };

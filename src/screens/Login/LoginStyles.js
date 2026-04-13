@@ -8,9 +8,11 @@ export const COLORS = {
   white: "#ffffff",
   slate900: "#0f172a",
   slate700: "#334155",
+  slate600: "#475569",
   slate500: "#64748b",
   slate400: "#94a3b8",
   slate200: "#e2e8f0",
+  slate100: "#f1f5f9",
   slate50: "#f8fafc",
   skyAccent: "#38BDF8",
 };
@@ -25,7 +27,6 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    // ضبط المسافة الرأسية للويب والموبايل
     paddingVertical: Platform.OS === "web" ? 40 : 20,
   },
   loadingOverlay: {
@@ -34,39 +35,39 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 100,
+    borderRadius: 24,
   },
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 24, // زوايا أنعم لشكل عصري
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.slate200,
     width: "100%",
-    maxWidth: 420, // عرض مثالي للـ Login
+    maxWidth: 480,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.08,
     shadowRadius: 20,
     elevation: 5,
     overflow: "hidden",
+    position: "relative",
   },
   logoSection: {
-    paddingTop: 48,
-    paddingBottom: 24,
+    paddingTop: 48, // زيادة الـ Padding العلوي
+    paddingBottom: 32,
     alignItems: "center",
   },
   logoCircle: {
-    width: 72,
+    width: 72, // تكبير اللوجو قليلاً
     height: 72,
     borderRadius: 36,
     backgroundColor: "rgba(16, 183, 72, 0.08)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "rgba(16, 183, 72, 0.1)",
   },
   appName: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "900",
     color: COLORS.slate900,
     letterSpacing: -0.5,
@@ -77,57 +78,60 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   welcomeTitle: {
-    fontSize: width < 380 ? 24 : 28,
-    fontWeight: "800",
+    fontSize: width < 380 ? 26 : 32,
+    fontWeight: "900",
     color: COLORS.slate900,
     marginBottom: 8,
     textAlign: "center",
   },
   welcomeSubtitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.slate500,
     fontWeight: "500",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 24,
   },
   formSection: {
     paddingHorizontal: 32,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
-  // --- زرار جوجل المطور ---
-  loginBtn: {
-    height: 56,
-    borderRadius: 16,
+
+  // --- زرار جوجل الأساسي الجديد ---
+  primaryGoogleBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.white,
+    height: 60, // زرار أكبر
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: COLORS.slate200,
-    // ظل خفيف للزرار
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
+    shadowRadius: 8,
+    elevation: 3,
+    ...Platform.select({
+      web: { cursor: "pointer", transition: "all 0.2s ease" },
+    }),
   },
-  loginBtnText: {
-    fontSize: 16,
+  primaryGoogleBtnText: {
+    fontSize: 17,
     fontWeight: "700",
     color: COLORS.slate700,
   },
-  // --- البانر السفلي ---
+
   banner: {
     marginHorizontal: 32,
     marginBottom: 32,
     padding: 16,
-    backgroundColor: "rgba(16, 183, 72, 0.04)",
+    backgroundColor: "rgba(16, 183, 72, 0.05)",
     borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderWidth: 1,
-    borderColor: "rgba(16, 183, 72, 0.08)",
+    borderColor: "rgba(16, 183, 72, 0.1)",
   },
   bannerIconBox: {
     width: 40,
@@ -179,5 +183,23 @@ export const styles = StyleSheet.create({
     marginTop: 24,
     lineHeight: 18,
     paddingHorizontal: 40,
+  },
+  rtlFab: {
+    position: "absolute",
+    bottom: 24,
+    right: 24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.white,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: COLORS.slate200,
   },
 });

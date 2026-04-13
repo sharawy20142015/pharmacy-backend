@@ -2,14 +2,14 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
-  ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  Image,
   useWindowDimensions,
   Modal,
+  FlatList,
   Pressable,
 } from "react-native";
+import { Image } from "expo-image"; // 👈 التأكد من استخدام expo-image
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   useNavigation,
@@ -24,17 +24,15 @@ import SearchBar from "../Home/components/SearchBar/SearchBar";
 import apiClient from "../../services/apiClient";
 import { useCart } from "../../context/CartContext";
 import { useLoading } from "../../context/LoadingContext";
-
-// 🚀 1. استيراد شاشة التحميل هنا عشان نعرضها في أول تحميل
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
-// --- Product Card Component ---
+// --- Product Card Component (بداخل نفس الملف أو منفصل) ---
 const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
   const { cartItems, addToCart, removeFromCart } = useCart();
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
 
   const handleCartAction = (e) => {
-    e.stopPropagation();
+    e.stopPropagation(); // منع الانتقال للتفاصيل عند الضغط على السلة
     if (isInCart) {
       removeFromCart(item.id);
     } else {
@@ -52,68 +50,62 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
       }
       style={[styles.productCard, { width: cardWidth }]}
     >
-      <View style={[styles.imageContainer, isMobile && { padding: 12 }]}>
+      <View style={styles.imageContainer}>
         <Image
-          source={{ uri: imageUri }}
+          source={imageUri}
           style={styles.productImage}
-          resizeMode="contain"
+          contentFit="contain"
+          transition={200}
+          cachePolicy="memory-disk"
         />
-        <View style={[styles.stockBadge, isMobile && { top: 8, left: 8 }]}>
-          <Text style={[styles.stockBadgeText, isMobile && { fontSize: 8 }]}>
-            IN STOCK
-          </Text>
+        <View style={styles.stockBadge}>
+          <Text style={styles.stockBadgeText}>IN STOCK</Text>
         </View>
       </View>
 
-      <View style={[styles.infoContainer, isMobile && { padding: 12 }]}>
+      <View style={styles.infoContainer}>
         <View style={styles.textStack}>
-          <Text style={[styles.brandName, isMobile && { fontSize: 10 }]}>
-            {item.Brand_Name || "GENERIC"}
-          </Text>
-          <Text
-            style={[styles.enName, isMobile && { fontSize: 13 }]}
-            numberOfLines={2}
-          >
+          <Text style={styles.brandName}>{item.Brand_Name || "GENERIC"}</Text>
+          <Text style={styles.enName} numberOfLines={2}>
             {item.en_name}
           </Text>
         </View>
+
         <View style={styles.priceContainer}>
           <View style={styles.mainPriceRow}>
-            <Text style={[styles.finalPrice, isMobile && { fontSize: 16 }]}>
+            <Text style={styles.finalPrice}>
               {item.final_price?.toFixed(2)}
             </Text>
-            <Text style={[styles.currency, isMobile && { fontSize: 10 }]}>
-              EGP
-            </Text>
+            <Text style={styles.currency}>EGP</Text>
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.floatingAddBtn,
+              isInCart && styles.floatingRemoveBtn,
+            ]}
+            onPress={handleCartAction}
+          >
+            <MaterialIcons
+              name={isInCart ? "remove-shopping-cart" : "shopping-cart"}
+              size={isMobile ? 18 : 22}
+              color={isInCart ? "#ef4444" : "#fff"}
+            />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[styles.floatingAddBtn, isInCart && styles.floatingRemoveBtn]}
-          onPress={handleCartAction}
-        >
-          <MaterialIcons
-            name={isInCart ? "remove-shopping-cart" : "shopping-cart"}
-            size={isMobile ? 18 : 22}
-            color={isInCart ? "#ef4444" : "#fff"}
-          />
-        </TouchableOpacity>
       </View>
     </Pressable>
   );
 };
 
-// --- Main Store Screen Component ---
 const StoreScreen = () => {
   const { width } = useWindowDimensions();
   const navigation = useNavigation();
   const route = useRoute();
-  const scrollRef = useRef(null);
+  const flatListRef = useRef(null);
   const { showLoading, hideLoading, isGlobalLoading } = useLoading();
 
-  // حالة أول تحميل
   const [isFirstLoad, setIsFirstLoad] = useState(true);
-
-  // States
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -128,6 +120,20 @@ const StoreScreen = () => {
   const [activeCategoryName, setActiveCategoryName] = useState(null);
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
+  const isDesktop = width >= 1024;
+  const isMobile = width < 768;
+  const numColumns = isDesktop ? 3 : 2;
+  const sidebarWidth = isDesktop ? 288 : 0;
+  const availableWidth =
+    Math.min(width, 1440) -
+    (isDesktop ? 48 : 24) -
+    sidebarWidth -
+    (isDesktop ? 40 : 0);
+  const cardWidth =
+    Math.floor(
+      (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
+    ) - 2;
 
   useFocusEffect(
     useCallback(() => {
@@ -152,25 +158,9 @@ const StoreScreen = () => {
     }, [route.params]),
   );
 
-  const isDesktop = width >= 1024;
-  const isMobile = width < 768;
-  const numColumns = isDesktop ? 3 : 2;
-  const sidebarWidth = isDesktop ? 288 : 0;
-  const availableWidth =
-    Math.min(width, 1440) -
-    (isDesktop ? 48 : 24) -
-    sidebarWidth -
-    (isDesktop ? 40 : 0);
-  const cardWidth =
-    Math.floor(
-      (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
-    ) - 2;
-
-  // جلب البيانات الأولية
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        // 🚀 شيلنا showLoading من هنا عشان متعملش تضارب مع المنتجات
         const [catResponse, brandResponse] = await Promise.all([
           apiClient.get("/categories/"),
           apiClient.get("/products/brands"),
@@ -179,38 +169,31 @@ const StoreScreen = () => {
         setAvailableCategoryNames(catResponse.data.map((c) => c.name));
         setAvailableBrands(brandResponse.data);
       } catch (error) {
-        console.error("Error fetching initial data:", error);
+        console.error(error);
       }
     };
     fetchInitialData();
   }, []);
 
-  // جلب المنتجات (هي المايسترو اللي بتتحكم في التحميل)
   const fetchProducts = useCallback(async () => {
     try {
       showLoading();
       const offset = (currentPage - 1) * ITEMS_PER_PAGE;
       let queryStr = `?limit=${ITEMS_PER_PAGE}&offset=${offset}`;
-
       if (searchQuery) queryStr += `&search=${encodeURIComponent(searchQuery)}`;
       if (activeCategorySlug)
         queryStr += `&category_slug=${encodeURIComponent(activeCategorySlug)}`;
-      if (selectedBrands.length > 0) {
-        selectedBrands.forEach((brand) => {
-          queryStr += `&brands=${encodeURIComponent(brand)}`;
-        });
-      }
+      if (selectedBrands.length > 0)
+        selectedBrands.forEach(
+          (b) => (queryStr += `&brands=${encodeURIComponent(b)}`),
+        );
 
       const response = await apiClient.get(`/products/${queryStr}`);
       const data = response.data.products || response.data;
-      const total = response.data.total || data.length;
-
       setProducts(data);
-      setTotalProducts(total);
-
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      setTotalProducts(response.data.total || data.length);
     } catch (error) {
-      console.error("Fetch Products Error:", error);
+      console.error(error);
     } finally {
       setIsFirstLoad(false);
       hideLoading();
@@ -233,19 +216,6 @@ const StoreScreen = () => {
     }
   };
 
-  const handleSearch = (text) => {
-    setSearchQuery(text);
-    setCurrentPage(1);
-  };
-
-  const handleClearFilters = () => {
-    setActiveCategoryName(null);
-    setActiveCategorySlug(null);
-    setSelectedBrands([]);
-    setSearchQuery("");
-    setCurrentPage(1);
-  };
-
   const renderPagination = () => {
     const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
     if (totalPages <= 1) return null;
@@ -260,7 +230,7 @@ const StoreScreen = () => {
           ]}
           onPress={() => {
             setCurrentPage(i);
-            scrollRef.current?.scrollTo({ y: 0, animated: true });
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
           }}
         >
           <Text
@@ -277,116 +247,142 @@ const StoreScreen = () => {
     return <View style={styles.paginationRow}>{pages}</View>;
   };
 
-  // 🚀 التعديل السحري: هنعرض شاشة نبض نفسها بدل null عشان ميظهرش شاشة بيضاء
-  if (isFirstLoad) {
-    return <LoadingScreen />;
-  }
+  const ListHeader = () => (
+    <View style={{ paddingTop: 5 }}>
+      {!isDesktop && (
+        <View style={{ marginBottom: 20, zIndex: 10 }}>
+          <SearchBar
+            onSearch={(t) => {
+              setSearchQuery(t);
+              setCurrentPage(1);
+            }}
+            initialValue={searchQuery}
+          />
+        </View>
+      )}
+      <View style={styles.toolsRow}>
+        <View style={styles.breadcrumb}>
+          <Text style={styles.crumbText}>Home</Text>
+          <MaterialIcons name="chevron-right" size={18} color="#94a3b8" />
+          <Text style={styles.crumbActive}>
+            {activeCategoryName || "All Products"}
+          </Text>
+        </View>
+        <View style={styles.toolsActions}>
+          {isDesktop && (
+            <SearchBar
+              onSearch={(t) => {
+                setSearchQuery(t);
+                setCurrentPage(1);
+              }}
+              initialValue={searchQuery}
+            />
+          )}
+          {!isDesktop && (
+            <TouchableOpacity
+              style={styles.mobileFilterBtn}
+              onPress={() => setIsFilterModalOpen(true)}
+            >
+              <MaterialIcons name="tune" size={20} color="#0f172a" />
+              <Text style={styles.filterBtnText}>Filter</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  if (isFirstLoad) return <LoadingScreen />;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header />
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
-        <View
-          style={[
-            styles.mainWrapper,
-            { paddingHorizontal: isDesktop ? 24 : 12 },
-          ]}
-        >
-          {!isDesktop && (
-            <View
-              style={{
-                marginBottom: 20,
-                zIndex: 9999,
-                elevation: 9999,
-                position: "relative",
-              }}
-            >
-              <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
+      <View style={[styles.mainWrapper, { flex: 1 }]}>
+        <View style={[styles.contentLayout, { flex: 1 }]}>
+          {isDesktop && (
+            <View style={{ width: sidebarWidth }}>
+              <FilterSidebar
+                categories={availableCategoryNames}
+                activeCategory={activeCategoryName}
+                onCategoryChange={handleCategoryChange}
+                brands={availableBrands}
+                selectedBrands={selectedBrands}
+                onToggleBrand={(b) => {
+                  setCurrentPage(1);
+                  setSelectedBrands((prev) =>
+                    prev.includes(b)
+                      ? prev.filter((x) => x !== b)
+                      : [...prev, b],
+                  );
+                }}
+                totalProductsCount={totalProducts}
+                onClearFilters={() => {
+                  setActiveCategoryName(null);
+                  setActiveCategorySlug(null);
+                  setSelectedBrands([]);
+                  setSearchQuery("");
+                  setCurrentPage(1);
+                }}
+                onApplyFilters={() =>
+                  flatListRef.current?.scrollToOffset({
+                    offset: 0,
+                    animated: true,
+                  })
+                }
+              />
             </View>
           )}
 
-          <View style={styles.toolsRow}>
-            <View style={styles.breadcrumb}>
-              <Text style={styles.crumbText}>Home</Text>
-              <MaterialIcons name="chevron-right" size={18} color="#94a3b8" />
-              <Text style={styles.crumbActive}>
-                {activeCategoryName || "All Products"}
-              </Text>
-            </View>
-            <View style={styles.toolsActions}>
-              {isDesktop && (
-                <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
-              )}
-              {!isDesktop && (
-                <TouchableOpacity
-                  style={styles.mobileFilterBtn}
-                  onPress={() => setIsFilterModalOpen(true)}
-                >
-                  <MaterialIcons name="tune" size={20} color="#0f172a" />
-                  <Text style={styles.filterBtnText}>Filter</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          <View style={[styles.contentLayout, { gap: isDesktop ? 40 : 0 }]}>
-            {isDesktop && (
-              <View style={{ width: sidebarWidth }}>
-                <FilterSidebar
-                  categories={availableCategoryNames}
-                  activeCategory={activeCategoryName}
-                  onCategoryChange={handleCategoryChange}
-                  brands={availableBrands}
-                  selectedBrands={selectedBrands}
-                  onToggleBrand={(b) => {
-                    setCurrentPage(1);
-                    setSelectedBrands((prev) =>
-                      prev.includes(b)
-                        ? prev.filter((x) => x !== b)
-                        : [...prev, b],
-                    );
-                  }}
-                  totalProductsCount={totalProducts}
-                  onClearFilters={handleClearFilters}
-                  onApplyFilters={() =>
-                    scrollRef.current?.scrollTo({ y: 0, animated: true })
-                  }
-                />
-              </View>
-            )}
-
-            <View style={styles.gridContainer}>
-              {products.length === 0 && !isGlobalLoading ? (
-                <View style={{ alignItems: "center", marginTop: 50 }}>
-                  <MaterialIcons name="search-off" size={64} color="#cbd5e1" />
-                  <Text style={{ marginTop: 16, color: "#64748b" }}>
-                    No products found matching your search
+          <FlatList
+            ref={flatListRef}
+            data={products}
+            keyExtractor={(item) => item.id.toString()}
+            numColumns={numColumns}
+            key={numColumns}
+            columnWrapperStyle={{
+              gap: isDesktop ? 24 : 12,
+              justifyContent: "flex-start",
+            }}
+            contentContainerStyle={{
+              paddingHorizontal: isDesktop ? 24 : 12,
+              paddingBottom: 40,
+            }}
+            ListHeaderComponent={ListHeader}
+            ListFooterComponent={
+              <View>
+                {products.length === 0 && !isGlobalLoading && (
+                  <View style={{ alignItems: "center", marginTop: 50 }}>
+                    <MaterialIcons
+                      name="search-off"
+                      size={64}
+                      color="#cbd5e1"
+                    />
+                    <Text style={{ marginTop: 16, color: "#64748b" }}>
+                      No products found
+                    </Text>
+                  </View>
+                )}
+                {renderPagination()}
+                <View style={styles.paginationSection}>
+                  <Text style={styles.pageText}>
+                    Showing {products.length} of {totalProducts} products
                   </Text>
                 </View>
-              ) : (
-                <View style={[styles.grid, { gap: isDesktop ? 24 : 12 }]}>
-                  {products.map((item) => (
-                    <ProductCard
-                      key={item.id}
-                      item={item}
-                      cardWidth={cardWidth}
-                      navigation={navigation}
-                      isMobile={isMobile}
-                    />
-                  ))}
-                </View>
-              )}
-              {renderPagination()}
-              <View style={styles.paginationSection}>
-                <Text style={styles.pageText}>
-                  Showing {products.length} of {totalProducts} products
-                </Text>
+                <Footer />
               </View>
-            </View>
-          </View>
+            }
+            renderItem={({ item }) => (
+              <ProductCard
+                item={item}
+                cardWidth={cardWidth}
+                navigation={navigation}
+                isMobile={isMobile}
+              />
+            )}
+            showsVerticalScrollIndicator={false}
+          />
         </View>
-        <Footer />
-      </ScrollView>
+      </View>
 
       <Modal visible={isFilterModalOpen} animationType="slide">
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
@@ -396,7 +392,7 @@ const StoreScreen = () => {
               <MaterialIcons name="close" size={28} color="#0f172a" />
             </TouchableOpacity>
           </View>
-          <ScrollView style={{ padding: 20 }}>
+          <View style={{ padding: 20, flex: 1 }}>
             <FilterSidebar
               categories={availableCategoryNames}
               activeCategory={activeCategoryName}
@@ -410,10 +406,14 @@ const StoreScreen = () => {
                 );
               }}
               totalProductsCount={totalProducts}
-              onClearFilters={handleClearFilters}
+              onClearFilters={() => {
+                setActiveCategoryName(null);
+                setSelectedBrands([]);
+                setIsFilterModalOpen(false);
+              }}
               onApplyFilters={() => setIsFilterModalOpen(false)}
             />
-          </ScrollView>
+          </View>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
