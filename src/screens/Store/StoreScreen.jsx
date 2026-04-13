@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Image,
   useWindowDimensions,
-  ActivityIndicator,
   Modal,
   Pressable,
 } from "react-native";
@@ -24,9 +23,10 @@ import FilterSidebar from "./FilterSidebar";
 import SearchBar from "../Home/components/SearchBar/SearchBar";
 import apiClient from "../../services/apiClient";
 import { useCart } from "../../context/CartContext";
-
-// 1. استيراد الـ Context الخاص بالتحميل
 import { useLoading } from "../../context/LoadingContext";
+
+// 🚀 1. استيراد شاشة التحميل هنا عشان نعرضها في أول تحميل
+import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
 // --- Product Card Component ---
 const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
@@ -108,9 +108,10 @@ const StoreScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const scrollRef = useRef(null);
+  const { showLoading, hideLoading, isGlobalLoading } = useLoading();
 
-  // 2. استخدام دوال التحميل العالمية
-  const { showLoading, hideLoading } = useLoading();
+  // حالة أول تحميل
+  const [isFirstLoad, setIsFirstLoad] = useState(true);
 
   // States
   const [products, setProducts] = useState([]);
@@ -128,22 +129,18 @@ const StoreScreen = () => {
   const [selectedBrands, setSelectedBrands] = useState([]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
-  // Handle incoming params from other screens
   useFocusEffect(
     useCallback(() => {
       let shouldUpdate = false;
-
       if (route.params?.search !== undefined) {
         setSearchQuery(route.params.search);
         shouldUpdate = true;
       }
-
       if (route.params?.categorySlug) {
         setActiveCategorySlug(route.params.categorySlug);
         setActiveCategoryName(route.params.categoryName);
         shouldUpdate = true;
       }
-
       if (shouldUpdate) {
         setCurrentPage(1);
         navigation.setParams({
@@ -155,7 +152,6 @@ const StoreScreen = () => {
     }, [route.params]),
   );
 
-  // Layout calculations
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
   const numColumns = isDesktop ? 3 : 2;
@@ -170,42 +166,35 @@ const StoreScreen = () => {
       (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
     ) - 2;
 
-  // جلب الأقسام والبراندات مع بعض أول ما الشاشة تفتح
+  // جلب البيانات الأولية
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        showLoading(); // 🚀 تفعيل الشاشة الخضراء
+        // 🚀 شيلنا showLoading من هنا عشان متعملش تضارب مع المنتجات
         const [catResponse, brandResponse] = await Promise.all([
           apiClient.get("/categories/"),
           apiClient.get("/products/brands"),
         ]);
-
         setAllCategoriesData(catResponse.data);
         setAvailableCategoryNames(catResponse.data.map((c) => c.name));
         setAvailableBrands(brandResponse.data);
       } catch (error) {
         console.error("Error fetching initial data:", error);
-      } finally {
-        hideLoading(); // 🚀 إخفاء الشاشة بعد انتهاء التحميل
       }
     };
     fetchInitialData();
   }, []);
 
-  // Fetch products from backend
+  // جلب المنتجات (هي المايسترو اللي بتتحكم في التحميل)
   const fetchProducts = useCallback(async () => {
     try {
-      showLoading(); // 🚀 تفعيل الشاشة عند أي تغيير (فلترة، بحث، تقليب صفحات)
+      showLoading();
       const offset = (currentPage - 1) * ITEMS_PER_PAGE;
-
       let queryStr = `?limit=${ITEMS_PER_PAGE}&offset=${offset}`;
 
-      if (searchQuery) {
-        queryStr += `&search=${encodeURIComponent(searchQuery)}`;
-      }
-      if (activeCategorySlug) {
+      if (searchQuery) queryStr += `&search=${encodeURIComponent(searchQuery)}`;
+      if (activeCategorySlug)
         queryStr += `&category_slug=${encodeURIComponent(activeCategorySlug)}`;
-      }
       if (selectedBrands.length > 0) {
         selectedBrands.forEach((brand) => {
           queryStr += `&brands=${encodeURIComponent(brand)}`;
@@ -213,16 +202,18 @@ const StoreScreen = () => {
       }
 
       const response = await apiClient.get(`/products/${queryStr}`);
-
       const data = response.data.products || response.data;
       const total = response.data.total || data.length;
 
       setProducts(data);
       setTotalProducts(total);
+
+      await new Promise((resolve) => setTimeout(resolve, 150));
     } catch (error) {
       console.error("Fetch Products Error:", error);
     } finally {
-      hideLoading(); // 🚀 إخفاء الشاشة بعد وصول البيانات
+      setIsFirstLoad(false);
+      hideLoading();
     }
   }, [activeCategorySlug, selectedBrands, currentPage, searchQuery]);
 
@@ -230,7 +221,6 @@ const StoreScreen = () => {
     fetchProducts();
   }, [fetchProducts]);
 
-  // Handlers
   const handleCategoryChange = (catName) => {
     setCurrentPage(1);
     if (!catName) {
@@ -259,7 +249,6 @@ const StoreScreen = () => {
   const renderPagination = () => {
     const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
     if (totalPages <= 1) return null;
-
     let pages = [];
     for (let i = 1; i <= totalPages; i++) {
       pages.push(
@@ -287,6 +276,11 @@ const StoreScreen = () => {
     }
     return <View style={styles.paginationRow}>{pages}</View>;
   };
+
+  // 🚀 التعديل السحري: هنعرض شاشة نبض نفسها بدل null عشان ميظهرش شاشة بيضاء
+  if (isFirstLoad) {
+    return <LoadingScreen />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -319,7 +313,6 @@ const StoreScreen = () => {
                 {activeCategoryName || "All Products"}
               </Text>
             </View>
-
             <View style={styles.toolsActions}>
               {isDesktop && (
                 <SearchBar onSearch={handleSearch} initialValue={searchQuery} />
@@ -355,16 +348,15 @@ const StoreScreen = () => {
                   }}
                   totalProductsCount={totalProducts}
                   onClearFilters={handleClearFilters}
-                  onApplyFilters={() => {
-                    scrollRef.current?.scrollTo({ y: 0, animated: true });
-                  }}
+                  onApplyFilters={() =>
+                    scrollRef.current?.scrollTo({ y: 0, animated: true })
+                  }
                 />
               </View>
             )}
 
             <View style={styles.gridContainer}>
-              {/* 3. ملاحظة: شيلنا الـ ActivityIndicator الداخلي لأننا بنستخدم الـ Global الآن */}
-              {products.length === 0 && !isFilterModalOpen ? (
+              {products.length === 0 && !isGlobalLoading ? (
                 <View style={{ alignItems: "center", marginTop: 50 }}>
                   <MaterialIcons name="search-off" size={64} color="#cbd5e1" />
                   <Text style={{ marginTop: 16, color: "#64748b" }}>
@@ -396,7 +388,6 @@ const StoreScreen = () => {
         <Footer />
       </ScrollView>
 
-      {/* Mobile Filter Modal */}
       <Modal visible={isFilterModalOpen} animationType="slide">
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
           <View style={styles.modalHeader}>
