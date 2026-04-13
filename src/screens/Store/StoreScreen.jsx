@@ -25,6 +25,9 @@ import SearchBar from "../Home/components/SearchBar/SearchBar";
 import apiClient from "../../services/apiClient";
 import { useCart } from "../../context/CartContext";
 
+// 1. استيراد الـ Context الخاص بالتحميل
+import { useLoading } from "../../context/LoadingContext";
+
 // --- Product Card Component ---
 const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
   const { cartItems, addToCart, removeFromCart } = useCart();
@@ -106,9 +109,11 @@ const StoreScreen = () => {
   const route = useRoute();
   const scrollRef = useRef(null);
 
+  // 2. استخدام دوال التحميل العالمية
+  const { showLoading, hideLoading } = useLoading();
+
   // States
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [totalProducts, setTotalProducts] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
@@ -169,14 +174,19 @@ const StoreScreen = () => {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const catResponse = await apiClient.get("/categories/");
+        showLoading(); // 🚀 تفعيل الشاشة الخضراء
+        const [catResponse, brandResponse] = await Promise.all([
+          apiClient.get("/categories/"),
+          apiClient.get("/products/brands"),
+        ]);
+
         setAllCategoriesData(catResponse.data);
         setAvailableCategoryNames(catResponse.data.map((c) => c.name));
-
-        const brandResponse = await apiClient.get("/products/brands");
         setAvailableBrands(brandResponse.data);
       } catch (error) {
         console.error("Error fetching initial data:", error);
+      } finally {
+        hideLoading(); // 🚀 إخفاء الشاشة بعد انتهاء التحميل
       }
     };
     fetchInitialData();
@@ -185,7 +195,7 @@ const StoreScreen = () => {
   // Fetch products from backend
   const fetchProducts = useCallback(async () => {
     try {
-      setLoading(true);
+      showLoading(); // 🚀 تفعيل الشاشة عند أي تغيير (فلترة، بحث، تقليب صفحات)
       const offset = (currentPage - 1) * ITEMS_PER_PAGE;
 
       let queryStr = `?limit=${ITEMS_PER_PAGE}&offset=${offset}`;
@@ -212,7 +222,7 @@ const StoreScreen = () => {
     } catch (error) {
       console.error("Fetch Products Error:", error);
     } finally {
-      setLoading(false);
+      hideLoading(); // 🚀 إخفاء الشاشة بعد وصول البيانات
     }
   }, [activeCategorySlug, selectedBrands, currentPage, searchQuery]);
 
@@ -288,7 +298,6 @@ const StoreScreen = () => {
             { paddingHorizontal: isDesktop ? 24 : 12 },
           ]}
         >
-          {/* 🟢 التعديل الجوهري هنا: إضافة zIndex و elevation للـ Wrapper بتاع الموبايل */}
           {!isDesktop && (
             <View
               style={{
@@ -354,46 +363,33 @@ const StoreScreen = () => {
             )}
 
             <View style={styles.gridContainer}>
-              {loading ? (
-                <ActivityIndicator
-                  size="large"
-                  color="#10b77f"
-                  style={{ marginTop: 100 }}
-                />
+              {/* 3. ملاحظة: شيلنا الـ ActivityIndicator الداخلي لأننا بنستخدم الـ Global الآن */}
+              {products.length === 0 && !isFilterModalOpen ? (
+                <View style={{ alignItems: "center", marginTop: 50 }}>
+                  <MaterialIcons name="search-off" size={64} color="#cbd5e1" />
+                  <Text style={{ marginTop: 16, color: "#64748b" }}>
+                    No products found matching your search
+                  </Text>
+                </View>
               ) : (
-                <>
-                  {products.length === 0 ? (
-                    <View style={{ alignItems: "center", marginTop: 50 }}>
-                      <MaterialIcons
-                        name="search-off"
-                        size={64}
-                        color="#cbd5e1"
-                      />
-                      <Text style={{ marginTop: 16, color: "#64748b" }}>
-                        No products found matching your search
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.grid, { gap: isDesktop ? 24 : 12 }]}>
-                      {products.map((item) => (
-                        <ProductCard
-                          key={item.id}
-                          item={item}
-                          cardWidth={cardWidth}
-                          navigation={navigation}
-                          isMobile={isMobile}
-                        />
-                      ))}
-                    </View>
-                  )}
-                  {renderPagination()}
-                  <View style={styles.paginationSection}>
-                    <Text style={styles.pageText}>
-                      Showing {products.length} of {totalProducts} products
-                    </Text>
-                  </View>
-                </>
+                <View style={[styles.grid, { gap: isDesktop ? 24 : 12 }]}>
+                  {products.map((item) => (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      cardWidth={cardWidth}
+                      navigation={navigation}
+                      isMobile={isMobile}
+                    />
+                  ))}
+                </View>
               )}
+              {renderPagination()}
+              <View style={styles.paginationSection}>
+                <Text style={styles.pageText}>
+                  Showing {products.length} of {totalProducts} products
+                </Text>
+              </View>
             </View>
           </View>
         </View>

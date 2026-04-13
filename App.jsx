@@ -3,9 +3,10 @@ import { NavigationContainer } from "@react-navigation/native";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import * as Linking from "expo-linking";
 
-// استيراد الـ Providers
+// 1. استيراد الـ Providers (بما فيهم الـ LoadingProvider الجديد)
 import { AuthProvider } from "./src/context/AuthContext";
 import { CartProvider } from "./src/context/CartContext";
+import { LoadingProvider } from "./src/context/LoadingContext"; // 👈 المايسترو الجديد
 
 // استيراد AppNavigator
 import AppNavigator from "./src/navigation/TabNavigator";
@@ -16,6 +17,7 @@ const linking = {
     "http://localhost:8081",
     "http://10.100.16.30:8081",
     "http://54.234.4.149:8081",
+    "https://pharmacy-app-domain.com", // ضيف الدومين بتاعك هنا
   ],
   config: {
     screens: {
@@ -74,17 +76,19 @@ const linking = {
 export default function App() {
   return (
     <GoogleOAuthProvider clientId="862508946163-tc53fo7jqb5ckq5tq48po8lqpimp8dnv.apps.googleusercontent.com">
-      {/* الـ Providers مرتبة لضمان أن كل سياق يرى الآخر */}
-      <AuthProvider>
-        <CartProvider>
-          <NavigationContainer
-            linking={linking}
-            fallback={null} // يمنع الوميض الأبيض أثناء التحميل
-          >
-            <AppNavigator />
-          </NavigationContainer>
-        </CartProvider>
-      </AuthProvider>
+      {/* 2. الـ LoadingProvider لازم يلف كل الـ Providers عشان يتحكم في الشاشة كلها */}
+      <LoadingProvider>
+        <AuthProvider>
+          <CartProvider>
+            <NavigationContainer
+              linking={linking}
+              fallback={null} // يمنع الوميض الأبيض أثناء التحميل
+            >
+              <AppNavigator />
+            </NavigationContainer>
+          </CartProvider>
+        </AuthProvider>
+      </LoadingProvider>
     </GoogleOAuthProvider>
   );
 }

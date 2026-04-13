@@ -13,7 +13,7 @@ import Footer from "../../components/UI/Footer/Footer";
 // 3. استيراد سكاشن الصفحة الرئيسية (Home Sections)
 import SearchBar from "./components/SearchBar/SearchBar";
 import HeroBanner from "./components/HeroBanner/HeroBanner";
-import RequestProduct from "./components/RequestProduct/RequestProduct"; // 👈 تم إضافة الاستيراد هنا
+import RequestProduct from "./components/RequestProduct/RequestProduct";
 import ShopByCategory from "./components/ShopByCategory/ShopByCategory";
 import OffersSection from "./components/OffersSection/OffersSection";
 import NewArrivals from "./components/NewArrivals/NewArrivals";
@@ -25,23 +25,57 @@ import FloatingButton from "./components/FloatingButton/FloatingButton";
 import Cosmetics from "./components/Cosmetics/Cosmetics";
 import SkinCareSection from "./components/SkinCare/SkinCareSection";
 
+// 4. استيراد خدمات جلب البيانات (APIs) - افترضنا أسماء الدوال بناءً على الشائع
+// ⚠️ تأكد من تعديل مسارات هذه الاستيرادات حسب هيكلة مشروعك
+import apiClient from "../../services/apiClient";
+
 const HomeScreen = () => {
+  // حالة التحميل الرئيسية
   const [isLoading, setIsLoading] = useState(true);
 
-  // تأثير التحميل الوهمي عند فتح الصفحة (ثانيتين)
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  // حالات تخزين البيانات (State)
+  const [banners, setBanners] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [newArrivals, setNewArrivals] = useState([]);
+  const [bestSellers, setBestSellers] = useState([]);
+  // ضيف أي حالات تانية محتاجها للسكاشن بتاعتك
+
+  // دالة لجلب كل البيانات مرة واحدة
+  const fetchAllHomeData = async () => {
+    try {
+      // بنستخدم Promise.all عشان يطلب كل الداتا في نفس اللحظة بالتوازي (أسرع بكتير)
+      const [bannersRes, categoriesRes, newArrivalsRes, bestSellersRes] =
+        await Promise.all([
+          api.get("/banners/home"), // جلب بانر الرئيسية
+          api.get("/categories/level-1"), // جلب الأقسام
+          api.get("/products/new-arrivals"), // جلب الأدوية الجديدة
+          api.get("/products/best-sellers"), // جلب الأكثر مبيعاً (كمثال)
+        ]);
+
+      // تخزين البيانات في الـ State
+      setBanners(bannersRes.data || []);
+      setCategories(categoriesRes.data || []);
+      setNewArrivals(newArrivalsRes.data || []);
+      setBestSellers(bestSellersRes.data || []);
+    } catch (error) {
+      console.log("❌ Error fetching home data:", error);
+      // ممكن تعرض Toast message هنا لو حابب
+    } finally {
+      // 🚀 أول ما كل الداتا توصل، شيل شاشة "نبض صيدلية" واعرض المحتوى
       setIsLoading(false);
-    }, 2000);
-    return () => clearTimeout(timer); // تنظيف الذاكرة
+    }
+  };
+
+  useEffect(() => {
+    fetchAllHomeData();
   }, []);
 
-  // إذا كانت الصفحة في حالة تحميل، اعرض شاشة اللوجو والسبينر
+  // إذا كانت الصفحة في حالة تحميل، اعرض شاشة اللوجو والسبينر الفخمة
   if (isLoading) {
     return <LoadingScreen />;
   }
 
-  // إذا انتهى التحميل، اعرض الواجهة الكاملة
+  // إذا انتهى التحميل، اعرض الواجهة الكاملة مرسومة بالداتا
   return (
     <SafeAreaView style={styles.safeArea}>
       {/* شريط الساعة والبطارية */}
@@ -57,23 +91,25 @@ const HomeScreen = () => {
         {/* الحاوية الرئيسية (بتلم المحتوى في الديسكتوب وتفرده في الموبايل) */}
         <View style={styles.container}>
           <SearchBar />
-          <HeroBanner />
 
-          {/* 👈 الكومبوننت الجديد تم إضافته تحت البانر مباشرة */}
+          {/* تمرير الداتا للسكاشن */}
+          <HeroBanner data={banners} />
+
+          {/* الكومبوننت الجديد */}
           <RequestProduct />
 
-          <ShopByCategory />
+          <ShopByCategory data={categories} />
           {/* <TrustedBrands /> */}
           {/* <OffersSection /> */}
           <Cosmetics />
           <SkinCareSection />
-          <NewArrivals />
-          <BestSellers />
+          <NewArrivals data={newArrivals} />
+          <BestSellers data={bestSellers} />
           <HealthTips />
           <Features />
         </View>
 
-        {/* الفوتر بره الـ container عشان ياخد العرض الكامل للشاشة (Black Footer) */}
+        {/* الفوتر بره الـ container عشان ياخد العرض الكامل للشاشة */}
         <Footer />
       </ScrollView>
 

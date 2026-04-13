@@ -1,12 +1,14 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Platform, View, ActivityIndicator, Text } from "react-native";
+import { Platform, View, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 
-// استيراد الـ Providers
+// 1. استيراد المكونات والـ Context
+import LoadingScreen from "../components/UI/LoadingScreen/LoadingScreen";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
+import { useLoading } from "../context/LoadingContext";
 
 // الشاشات
 import HomeScreen from "../screens/Home/HomeScreen";
@@ -17,15 +19,10 @@ import SuccessScreen from "../screens/Success/SuccessScreen";
 import LoginScreen from "../screens/Login/LoginScreen";
 import ProfileScreen from "../screens/Profile/ProfileScreen";
 import RequestProductScreen from "../screens/Home/components/RequestProductScreen/RequestProductScreen";
-
-// 👈 استيراد شاشة طلب المنتج الجديدة (مرة واحدة فقط أهي)
-
-// شاشة الإدارة
-import OrderControlScreen from "../screens/Admin/OrderManagement/OrderControlScreen";
 import AdminControlScreen from "../screens/Admin/OrderManagement/AdminControlScreen";
+import ProductDetailsScreen from "../screens/ProductDetailsScreen/ProductDetailsScreen";
 
 import { COLORS } from "../theme/colors";
-import ProductDetailsScreen from "../screens/ProductDetailsScreen/ProductDetailsScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -45,9 +42,9 @@ const HomeStack = () => (
   </Stack.Navigator>
 );
 
-// --- 2. الـ Tab Navigator الموحد (للعميل والأدمن) ---
+// --- 2. الـ Tab Navigator الموحد ---
 const TabNavigator = () => {
-  const { user } = useAuth(); // نعرف مين اللي فاتح عشان نتحكم في التابات
+  const { user } = useAuth();
   const { cartItems } = useCart();
   const totalItems = cartItems.reduce((sum, item) => sum + item.qty, 0);
 
@@ -91,8 +88,6 @@ const TabNavigator = () => {
         component={StoreStack}
         options={{ title: "المتجر" }}
       />
-
-      {/* 🛠️ تاب الإدارة: تظهر فقط لو المستخدم أدمن وبجانب باقي التابات */}
       {isAdmin && (
         <Tab.Screen
           name="Admin"
@@ -100,7 +95,6 @@ const TabNavigator = () => {
           options={{ title: "الإدارة" }}
         />
       )}
-
       <Tab.Screen
         name="Cart"
         component={CartScreen}
@@ -118,49 +112,55 @@ const TabNavigator = () => {
   );
 };
 
-// --- 3. App Navigator الرئيسي ---
+// --- 3. App Navigator الرئيسي (الحل الجذري هنا) ---
 const AppNavigator = () => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const { isGlobalLoading } = useLoading();
 
-  if (isLoading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#fff",
-        }}
-      >
-        <ActivityIndicator size="large" color={COLORS.primary} />
-      </View>
-    );
+  // الحالة الوحيدة اللي نمسح فيها الـ Navigator هي وقت الـ Auth في بداية تشغيل التطبيق
+  if (authLoading) {
+    return <LoadingScreen />;
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {/* دلوقتي التوجيه أصبح موحد: 
-          الكل بيدخل على MainTabs، والـ TabNavigator هو اللي بيقرر يظهر تاب الإدارة ولا لا
-      */}
-      <Stack.Screen name="MainTabs" component={TabNavigator} />
+    <View style={{ flex: 1 }}>
+      {/* الـ Navigator هيفضل شغال في الخلفية ومش هيعمل Reset */}
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="MainTabs" component={TabNavigator} />
+        {!user && <Stack.Screen name="Login" component={LoginScreen} />}
+        <Stack.Group screenOptions={{ presentation: "card" }}>
+          <Stack.Screen name="Checkout" component={CheckoutScreen} />
+          <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
+          <Stack.Screen
+            name="ProductDetails"
+            component={ProductDetailsScreen}
+          />
+          <Stack.Screen
+            name="RequestProductScreen"
+            component={RequestProductScreen}
+          />
+        </Stack.Group>
+      </Stack.Navigator>
 
-      {/* شاشة اللوجن تظهر كـ Modal أو شاشة فوق التابات لو مش مسجل */}
-      {!user && <Stack.Screen name="Login" component={LoginScreen} />}
-
-      {/* شاشات إضافية */}
-      <Stack.Group screenOptions={{ presentation: "card" }}>
-        <Stack.Screen name="Checkout" component={CheckoutScreen} />
-        <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
-        <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
-
-        {/* 👈 تم إضافة شاشة طلب المنتج هنا */}
-        <Stack.Screen
-          name="RequestProductScreen"
-          component={RequestProductScreen}
-        />
-      </Stack.Group>
-    </Stack.Navigator>
+      {/* 🚀 الـ Global Spinner يظهر "فوق" الشاشات كـ Overlay */}
+      {isGlobalLoading && (
+        <View style={styles.overlayLoading}>
+          <LoadingScreen />
+        </View>
+      )}
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  overlayLoading: {
+    ...StyleSheet.absoluteFillObject, // بيفرد الفيو على كامل الشاشة
+    backgroundColor: "rgba(255, 255, 255, 0.7)", // خلفية شفافة بسيطة عشان العميل يحس إنه لسه في نفس الصفحة
+    zIndex: 9999, // عشان يغطي أي حاجة تانية
+    elevation: 9999, // للأندرويد
+    justifyContent: "center",
+    alignItems: "center",
+  },
+});
 
 export default AppNavigator;
