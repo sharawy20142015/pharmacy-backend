@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  ScrollView,
+} from "react";
 import {
   View,
   Text,
@@ -9,7 +15,7 @@ import {
   FlatList,
   Pressable,
 } from "react-native";
-import { Image } from "expo-image"; // 👈 التأكد من استخدام expo-image
+import { Image } from "expo-image"; // 👈 استخدام expo-image للأداء والثبات
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   useNavigation,
@@ -26,13 +32,13 @@ import { useCart } from "../../context/CartContext";
 import { useLoading } from "../../context/LoadingContext";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
-// --- Product Card Component (بداخل نفس الملف أو منفصل) ---
+// --- Product Card Component ---
 const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
   const { cartItems, addToCart, removeFromCart } = useCart();
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
 
   const handleCartAction = (e) => {
-    e.stopPropagation(); // منع الانتقال للتفاصيل عند الضغط على السلة
+    e.stopPropagation(); // منع الانتقال للتفاصيل عند الضغط على زر السلة
     if (isInCart) {
       removeFromCart(item.id);
     } else {
@@ -50,11 +56,12 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
       }
       style={[styles.productCard, { width: cardWidth }]}
     >
+      {/* حاوية الصورة - تم تحديد ارتفاع ثابت في الستايل */}
       <View style={styles.imageContainer}>
         <Image
-          source={imageUri}
+          source={{ uri: imageUri }}
           style={styles.productImage}
-          contentFit="contain"
+          contentFit="contain" // 👈 يضمن عدم تمدد الصورة خارج الحدود
           transition={200}
           cachePolicy="memory-disk"
         />
@@ -65,7 +72,9 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
 
       <View style={styles.infoContainer}>
         <View style={styles.textStack}>
-          <Text style={styles.brandName}>{item.Brand_Name || "GENERIC"}</Text>
+          <Text style={styles.brandName} numberOfLines={1}>
+            {item.Brand_Name || "GENERIC"}
+          </Text>
           <Text style={styles.enName} numberOfLines={2}>
             {item.en_name}
           </Text>
@@ -126,14 +135,11 @@ const StoreScreen = () => {
   const numColumns = isDesktop ? 3 : 2;
   const sidebarWidth = isDesktop ? 288 : 0;
   const availableWidth =
-    Math.min(width, 1440) -
-    (isDesktop ? 48 : 24) -
-    sidebarWidth -
-    (isDesktop ? 40 : 0);
+    Math.min(width, 1440) - (isDesktop ? 48 : 24) - sidebarWidth;
   const cardWidth =
     Math.floor(
       (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
-    ) - 2;
+    ) - 5;
 
   useFocusEffect(
     useCallback(() => {
@@ -216,37 +222,6 @@ const StoreScreen = () => {
     }
   };
 
-  const renderPagination = () => {
-    const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
-    if (totalPages <= 1) return null;
-    let pages = [];
-    for (let i = 1; i <= totalPages; i++) {
-      pages.push(
-        <TouchableOpacity
-          key={i}
-          style={[
-            styles.pageButton,
-            currentPage === i && styles.activePageButton,
-          ]}
-          onPress={() => {
-            setCurrentPage(i);
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-          }}
-        >
-          <Text
-            style={[
-              styles.pageButtonText,
-              currentPage === i && styles.activePageButtonText,
-            ]}
-          >
-            {i}
-          </Text>
-        </TouchableOpacity>,
-      );
-    }
-    return <View style={styles.paginationRow}>{pages}</View>;
-  };
-
   const ListHeader = () => (
     <View style={{ paddingTop: 5 }}>
       {!isDesktop && (
@@ -297,90 +272,81 @@ const StoreScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header />
-      <View style={[styles.mainWrapper, { flex: 1 }]}>
-        <View style={[styles.contentLayout, { flex: 1 }]}>
-          {isDesktop && (
-            <View style={{ width: sidebarWidth }}>
-              <FilterSidebar
-                categories={availableCategoryNames}
-                activeCategory={activeCategoryName}
-                onCategoryChange={handleCategoryChange}
-                brands={availableBrands}
-                selectedBrands={selectedBrands}
-                onToggleBrand={(b) => {
-                  setCurrentPage(1);
-                  setSelectedBrands((prev) =>
-                    prev.includes(b)
-                      ? prev.filter((x) => x !== b)
-                      : [...prev, b],
-                  );
-                }}
-                totalProductsCount={totalProducts}
-                onClearFilters={() => {
-                  setActiveCategoryName(null);
-                  setActiveCategorySlug(null);
-                  setSelectedBrands([]);
-                  setSearchQuery("");
-                  setCurrentPage(1);
-                }}
-                onApplyFilters={() =>
-                  flatListRef.current?.scrollToOffset({
-                    offset: 0,
-                    animated: true,
-                  })
-                }
-              />
-            </View>
-          )}
-
-          <FlatList
-            ref={flatListRef}
-            data={products}
-            keyExtractor={(item) => item.id.toString()}
-            numColumns={numColumns}
-            key={numColumns}
-            columnWrapperStyle={{
-              gap: isDesktop ? 24 : 12,
-              justifyContent: "flex-start",
-            }}
-            contentContainerStyle={{
-              paddingHorizontal: isDesktop ? 24 : 12,
-              paddingBottom: 40,
-            }}
-            ListHeaderComponent={ListHeader}
-            ListFooterComponent={
-              <View>
-                {products.length === 0 && !isGlobalLoading && (
-                  <View style={{ alignItems: "center", marginTop: 50 }}>
-                    <MaterialIcons
-                      name="search-off"
-                      size={64}
-                      color="#cbd5e1"
-                    />
-                    <Text style={{ marginTop: 16, color: "#64748b" }}>
-                      No products found
-                    </Text>
-                  </View>
-                )}
-                {renderPagination()}
-                <View style={styles.paginationSection}>
-                  <Text style={styles.pageText}>
-                    Showing {products.length} of {totalProducts} products
-                  </Text>
-                </View>
-                <Footer />
+      <View style={{ flex: 1 }}>
+        <View style={[styles.mainWrapper, { flex: 1 }]}>
+          <View style={[styles.contentLayout, { flex: 1 }]}>
+            {isDesktop && (
+              <View style={{ width: sidebarWidth }}>
+                <FilterSidebar
+                  categories={availableCategoryNames}
+                  activeCategory={activeCategoryName}
+                  onCategoryChange={handleCategoryChange}
+                  brands={availableBrands}
+                  selectedBrands={selectedBrands}
+                  onToggleBrand={(b) => {
+                    setCurrentPage(1);
+                    setSelectedBrands((prev) =>
+                      prev.includes(b)
+                        ? prev.filter((x) => x !== b)
+                        : [...prev, b],
+                    );
+                  }}
+                  totalProductsCount={totalProducts}
+                  onClearFilters={() => {
+                    setActiveCategoryName(null);
+                    setSelectedBrands([]);
+                    setCurrentPage(1);
+                  }}
+                  onApplyFilters={() =>
+                    flatListRef.current?.scrollToOffset({
+                      offset: 0,
+                      animated: true,
+                    })
+                  }
+                />
               </View>
-            }
-            renderItem={({ item }) => (
-              <ProductCard
-                item={item}
-                cardWidth={cardWidth}
-                navigation={navigation}
-                isMobile={isMobile}
-              />
             )}
-            showsVerticalScrollIndicator={false}
-          />
+
+            <FlatList
+              ref={flatListRef}
+              data={products}
+              keyExtractor={(item) => item.id.toString()}
+              numColumns={numColumns}
+              key={numColumns}
+              columnWrapperStyle={{
+                gap: isDesktop ? 24 : 12,
+                justifyContent: "flex-start",
+              }}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              ListHeaderComponent={ListHeader}
+              ListFooterComponent={
+                <View>
+                  {products.length === 0 && !isGlobalLoading && (
+                    <View style={{ alignItems: "center", marginTop: 50 }}>
+                      <MaterialIcons
+                        name="search-off"
+                        size={64}
+                        color="#cbd5e1"
+                      />
+                      <Text style={{ marginTop: 16, color: "#64748b" }}>
+                        No products found
+                      </Text>
+                    </View>
+                  )}
+                  <Footer />
+                </View>
+              }
+              renderItem={({ item }) => (
+                <ProductCard
+                  item={item}
+                  cardWidth={cardWidth}
+                  navigation={navigation}
+                  isMobile={isMobile}
+                />
+              )}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
         </View>
       </View>
 
@@ -392,7 +358,7 @@ const StoreScreen = () => {
               <MaterialIcons name="close" size={28} color="#0f172a" />
             </TouchableOpacity>
           </View>
-          <View style={{ padding: 20, flex: 1 }}>
+          <ScrollView style={{ padding: 20 }}>
             <FilterSidebar
               categories={availableCategoryNames}
               activeCategory={activeCategoryName}
@@ -413,7 +379,7 @@ const StoreScreen = () => {
               }}
               onApplyFilters={() => setIsFilterModalOpen(false)}
             />
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

@@ -1,16 +1,13 @@
 import { StyleSheet, Platform } from "react-native";
 
 export const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#f6f8f7",
-  },
+  safeArea: { flex: 1, backgroundColor: "#f6f8f7" },
   mainWrapper: {
     maxWidth: 1440,
     alignSelf: "center",
     width: "100%",
     paddingVertical: 24,
-    zIndex: 1,
+    paddingHorizontal: 24, // 🟢 زيادة المسافة الجانبية قليلاً
   },
   toolsRow: {
     flexDirection: "row",
@@ -18,30 +15,15 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 32,
     gap: 16,
-    zIndex: 5000,
-    elevation: 5,
   },
-  breadcrumb: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  crumbText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#64748b",
-  },
-  crumbActive: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#0f172a",
-  },
+  breadcrumb: { flexDirection: "row", alignItems: "center", gap: 8 },
+  crumbText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
+  crumbActive: { fontSize: 14, fontWeight: "bold", color: "#0f172a" },
   toolsActions: {
     flex: 1,
     flexDirection: "row",
     gap: 12,
     justifyContent: "flex-end",
-    zIndex: 6000,
   },
   mobileFilterBtn: {
     flexDirection: "row",
@@ -54,78 +36,66 @@ export const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
   },
-  filterBtnText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#0f172a",
-  },
+  filterBtnText: { fontSize: 14, fontWeight: "bold", color: "#0f172a" },
   contentLayout: {
     flexDirection: "row",
-    zIndex: 1,
-  },
-  gridContainer: {
-    flex: 1,
+    gap: 40,
   },
 
-  // --- Product Card Style (Modified for Image Fix) ---
+  // --- Product Card Style Fixed ---
   productCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    overflow: "hidden",
+    overflow: "hidden", // 👈 يضمن عدم خروج المحتوى عن الزوايا المنحنية
     marginBottom: 16,
-    // تم إلغاء الـ Padding هنا ليعمل الـ Pressable على كامل المساحة
     ...Platform.select({
-      web: {
-        transition: "transform 0.2s ease-in-out",
-      },
+      web: { cursor: "pointer" },
     }),
   },
   imageContainer: {
     width: "100%",
-    height: 220, // 👈 تحديد ارتفاع ثابت للصورة لحل مشكلة الحجم الضخم
+    height: 240, // 👈 تحديد ارتفاع ثابت للصورة (يحل مشكلة الحجم الضخم)
     backgroundColor: "#f8fafc",
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
+    padding: 20, // 🟢 مساحة تنفس حول الصورة
   },
   productImage: {
-    width: "80%",
-    height: "80%",
+    width: "100%",
+    height: "100%",
   },
   stockBadge: {
     position: "absolute",
-    top: 10,
-    left: 10,
+    top: 12,
+    left: 12,
     backgroundColor: "#10b77f",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
   },
-  stockBadgeText: {
-    color: "#fff",
-    fontSize: 9,
-    fontWeight: "900",
-  },
+  stockBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900" },
   infoContainer: {
     padding: 16,
     flex: 1,
+    justifyContent: "space-between",
   },
-  textStack: {
-    marginBottom: 8,
-  },
+  textStack: { marginBottom: 12 },
   brandName: {
     fontSize: 10,
     fontWeight: "800",
     color: "#94a3b8",
     textTransform: "uppercase",
+    marginBottom: 4,
   },
   enName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0f172a",
-    height: 40, // للحفاظ على سطرين دائمًا
+    height: 44, // 👈 ارتفاع ثابت لسطرين
+    lineHeight: 22,
   },
   priceContainer: {
     flexDirection: "row",
@@ -133,75 +103,19 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  mainPriceRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 2,
-  },
-  finalPrice: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#10b77f",
-  },
-  currency: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: "#10b77f",
-  },
+  mainPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 2 },
+  finalPrice: { fontSize: 20, fontWeight: "900", color: "#10b77f" },
+  currency: { fontSize: 10, fontWeight: "bold", color: "#10b77f" },
   floatingAddBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     backgroundColor: "#10b77f",
-    borderRadius: 18,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
-  floatingRemoveBtn: {
-    backgroundColor: "#fee2e2",
-  },
+  floatingRemoveBtn: { backgroundColor: "#fee2e2" },
 
-  // --- Pagination & Footer ---
-  paginationSection: {
-    marginTop: 32,
-    alignItems: "center",
-    paddingBottom: 20,
-  },
-  paginationRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
-  },
-  pageButton: {
-    minWidth: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 12,
-  },
-  activePageButton: {
-    backgroundColor: "#10b77f",
-    borderColor: "#10b77f",
-  },
-  pageButtonText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#64748b",
-  },
-  activePageButtonText: {
-    color: "#fff",
-  },
-  pageText: {
-    fontSize: 13,
-    color: "#94a3b8",
-    fontWeight: "600",
-  },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -210,9 +124,5 @@ export const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#0f172a",
-  },
+  modalTitle: { fontSize: 20, fontWeight: "bold", color: "#0f172a" },
 });
