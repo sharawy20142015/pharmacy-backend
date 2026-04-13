@@ -19,10 +19,11 @@ import apiClient from "../../../services/apiClient";
 // 🟢 استيراد الستايلات المفصولة
 import { styles } from "./AdminControlStyles";
 
-// 🟢 استيراد مكونات الطلبات
+// 🟢 استيراد المكونات (Components)
 import StatusTabs from "./components/StatusTabs";
 import OrderCard from "./components/OrderCard";
 import OrderDetailModal from "./components/OrderDetailModal";
+import AddProductForm from "./components/AddProductForm"; // 👈 استيراد فورم إضافة المنتج الجديد
 
 // --- إعدادات حالات الطلب ---
 const STATUS_CONFIG = {
@@ -69,6 +70,7 @@ const ADMIN_TABS = [
   { id: "orders", label: "الطلبات", icon: "shopping-bag" },
   { id: "categories", label: "الفئات", icon: "grid" },
   { id: "products", label: "المنتجات", icon: "package" },
+  { id: "add_product", label: "إضافة منتج", icon: "plus-circle" },
   { id: "customers", label: "العملاء", icon: "users" },
 ];
 
@@ -141,7 +143,6 @@ const AdminControlScreen = () => {
           <Text style={styles.sidebarTitle}>لوحة الإدارة</Text>
         </View>
       )}
-
       <ScrollView
         horizontal={!isLargeScreen}
         showsHorizontalScrollIndicator={false}
@@ -173,7 +174,6 @@ const AdminControlScreen = () => {
           );
         })}
       </ScrollView>
-
       {isLargeScreen && (
         <TouchableOpacity style={styles.logoutBtnSidebar} onPress={logout}>
           <MaterialIcons name="logout" size={20} color={COLORS.red500} />
@@ -190,7 +190,6 @@ const AdminControlScreen = () => {
         onSelectFilter={applyFilter}
         config={STATUS_CONFIG}
       />
-
       {isLoading && !isRefreshing ? (
         <ActivityIndicator
           size="large"
@@ -248,7 +247,6 @@ const AdminControlScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* الهيدر العلوي */}
       <View style={styles.header}>
         <View
           style={{
@@ -279,7 +277,6 @@ const AdminControlScreen = () => {
         </View>
       </View>
 
-      {/* المحتوى المقسم لـ Sidebar و Content */}
       <View
         style={[
           styles.mainLayout,
@@ -290,6 +287,12 @@ const AdminControlScreen = () => {
         <View style={styles.contentArea}>
           {activeTab === "orders" && renderOrdersContent()}
           {activeTab === "categories" && renderCategoriesContent()}
+
+          {/* 👈 هنا استخدمنا الكومبوننت الجديد وباصينا ليه isLargeScreen */}
+          {activeTab === "add_product" && (
+            <AddProductForm isLargeScreen={isLargeScreen} />
+          )}
+
           {activeTab === "products" && (
             <View style={styles.placeholderContainer}>
               <Text>إدارة المنتجات</Text>
