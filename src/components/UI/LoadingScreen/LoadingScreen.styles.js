@@ -1,39 +1,62 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Dimensions, Platform } from "react-native";
 import { COLORS } from "../../../theme/colors";
+
+const { width, height } = Dimensions.get("window");
 
 export const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: COLORS.white,
+    // نستخدم absoluteFillObject عشان يفرش على الشاشة كلها فوق أي عناصر تانية
+    ...StyleSheet.absoluteFillObject,
+    width: width,
+    height: height,
+    backgroundColor: COLORS.white || "#ffffff",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 999, // عشان يغطي أي حاجة وراه
+    zIndex: 99999, // أعلى طبقة ممكنة
   },
   logoSection: {
     alignItems: "center",
-    marginBottom: 30,
+    justifyContent: "center",
+    marginBottom: 50,
   },
   logoIconWrap: {
     backgroundColor: COLORS.primary,
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 15,
+    width: 90, // أبعاد ثابتة للدائرة عشان نضمن التناسق
+    height: 90,
+    borderRadius: 30, // تدويرة عصرية
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    // شادو احترافي (Neumorphism style بسيط)
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 15,
+    elevation: 12,
   },
   logoText: {
-    fontSize: 28,
+    fontSize: 34,
     fontWeight: "900",
-    color: COLORS.slate900,
+    color: "#0f172a", // Slate 900
+    letterSpacing: -1.5,
+    textAlign: "center",
   },
   logoTextHighlight: {
     color: COLORS.primary,
-    fontWeight: "500",
+    fontWeight: "800",
   },
   spinnerContainer: {
-    marginTop: 20,
+    position: "absolute",
+    bottom: height * 0.15, // وضع الـ Spinner تحت اللوجو بمسافة كويسة
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: "#64748b", // Slate 500
+    fontWeight: "600",
+    letterSpacing: 1,
+    textTransform: "uppercase",
   },
 });

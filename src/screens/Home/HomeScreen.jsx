@@ -24,10 +24,10 @@ import Features from "./components/Features/Features";
 import FloatingButton from "./components/FloatingButton/FloatingButton";
 import Cosmetics from "./components/Cosmetics/Cosmetics";
 import SkinCareSection from "./components/SkinCare/SkinCareSection";
+import apiClient from "../../services/apiClient";
 
 // 4. استيراد خدمات جلب البيانات (APIs) - افترضنا أسماء الدوال بناءً على الشائع
 // ⚠️ تأكد من تعديل مسارات هذه الاستيرادات حسب هيكلة مشروعك
-import apiClient from "../../services/apiClient";
 
 const HomeScreen = () => {
   // حالة التحميل الرئيسية

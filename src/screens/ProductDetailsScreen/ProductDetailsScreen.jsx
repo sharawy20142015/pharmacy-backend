@@ -17,7 +17,7 @@ import { productService } from "../../services/productService";
 import { useCart } from "../../context/CartContext";
 import Footer from "../../components/UI/Footer/Footer";
 
-// 🚀 1. استيراد كونتكست التحميل وشاشة اللوجو
+// 🚀 استيراد كونتكست التحميل وشاشة اللوجو
 import { useLoading } from "../../context/LoadingContext";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
@@ -29,7 +29,7 @@ const ProductDetailsScreen = () => {
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
 
-  // 🚀 2. استخدام دوال التحميل
+  // 🚀 استخدام دوال التحميل
   const { showLoading, hideLoading } = useLoading();
   const [isFirstLoad, setIsFirstLoad] = useState(true);
 
@@ -59,12 +59,12 @@ const ProductDetailsScreen = () => {
     }
   };
 
-  // 🚀 3. جلب تفاصيل المنتج والمنتجات ذات الصلة
+  // 🚀 جلب تفاصيل المنتج والمنتجات ذات الصلة
   useEffect(() => {
     const getDetails = async () => {
       if (!productId) return;
       try {
-        showLoading(); // إظهار شاشة نبض
+        showLoading();
         const responseData = await productService.getProductById(productId);
 
         if (responseData) {
@@ -80,19 +80,17 @@ const ProductDetailsScreen = () => {
           }
         }
 
-        // إعطاء وقت صغير جداً للمتصفح عشان يرسم الصور في الخلفية
         await new Promise((resolve) => setTimeout(resolve, 150));
       } catch (error) {
         console.error("Fetch Error:", error);
       } finally {
-        setIsFirstLoad(false); // فك القفل السحري
-        hideLoading(); // إخفاء الشاشة
+        setIsFirstLoad(false);
+        hideLoading();
       }
     };
     getDetails();
   }, [productId]);
 
-  // 🚀 4. عرض شاشة التحميل الفخمة بدل السبينر العادي
   if (isFirstLoad) {
     return <LoadingScreen />;
   }
@@ -249,20 +247,7 @@ const ProductDetailsScreen = () => {
                   )}
                 </View>
 
-                <View style={styles.prescAlert}>
-                  <MaterialIcons name="description" size={26} color="#38BDF8" />
-                  <View style={styles.prescTextCol}>
-                    <Text style={styles.prescTitle}>
-                      هذا الدواء يتطلب وصفة طبية
-                    </Text>
-                    <Text style={styles.prescSub}>
-                      يرجى رفع صورة الروشتة لإتمام الطلب
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={styles.prescBtn}>
-                    <Text style={styles.prescBtnText}>رفع</Text>
-                  </TouchableOpacity>
-                </View>
+                {/* تم حذف قسم Prescription Alert من هنا */}
 
                 {isDesktop && (
                   <View style={styles.purchaseControls}>
