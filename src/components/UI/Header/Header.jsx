@@ -1,19 +1,20 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  TextInput,
   useWindowDimensions,
-  Image,
   Platform,
 } from "react-native";
+// 👇 1. استيراد Image من expo-image
+import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { styles } from "./Header.styles";
 import { COLORS } from "../../../theme/colors";
 import { useCart } from "../../../context/CartContext";
 import { useNavigation } from "@react-navigation/native";
+
+import { useAuth } from "../../../context/AuthContext";
 
 const Header = () => {
   const { width } = useWindowDimensions();
@@ -21,36 +22,12 @@ const Header = () => {
   const navigation = useNavigation();
   const { cartItems } = useCart();
 
-  const [user, setUser] = useState(null);
+  const { user } = useAuth();
 
-  useEffect(() => {
-    const checkUser = async () => {
-      let userData = null;
-      if (Platform.OS === "web") {
-        const sessionData = window.sessionStorage.getItem("userData");
-        userData = sessionData ? JSON.parse(sessionData) : null;
-      }
-
-      if (!userData) {
-        const localData = await AsyncStorage.getItem("userData");
-        userData = localData ? JSON.parse(localData) : null;
-      }
-
-      setUser(userData);
-    };
-
-    checkUser();
-    const interval = setInterval(checkUser, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // --- 👇 الدالة الذكية للتنقل بناءً على حالة المستخدم ---
   const handleProfilePress = () => {
     if (user) {
-      // لو مسجل دخول، وديه للـ Profile مباشرة جوه الـ Account Stack
       navigation.navigate("Account", { screen: "Profile" });
     } else {
-      // لو مش مسجل، وديه لصفحة الـ Login
       navigation.navigate("Account", { screen: "Login" });
     }
   };
@@ -81,10 +58,6 @@ const Header = () => {
 
         {/* --- الأزرار اليمنى --- */}
         <View style={styles.rightGroup}>
-          {/* <TouchableOpacity style={styles.iconCircle}>
-            <MaterialIcons name="search" size={24} color={COLORS.slate700} />
-          </TouchableOpacity> */}
-
           <TouchableOpacity
             style={styles.iconCircle}
             onPress={() => navigation.navigate("Cart")}
@@ -101,7 +74,7 @@ const Header = () => {
             )}
           </TouchableOpacity>
 
-          {/* 👇 أيقونة البروفايل المحدثة بالمنطق الجديد */}
+          {/* أيقونة البروفايل */}
           <TouchableOpacity
             style={[
               styles.iconCircle,
@@ -115,9 +88,13 @@ const Header = () => {
           >
             {user ? (
               user.avatar_url ? (
+                // 👇 2. استخدام expo-image لعرض صورة المستخدم
                 <Image
-                  source={{ uri: user.avatar_url }}
+                  source={user.avatar_url} // تمرير الرابط مباشرة
                   style={{ width: "100%", height: "100%" }}
+                  contentFit="cover" // عشان الصورة تملا الدائرة بالكامل
+                  transition={200} // ظهور ناعم
+                  cachePolicy="memory-disk" // حفظ الصورة في الكاش
                 />
               ) : (
                 <Text

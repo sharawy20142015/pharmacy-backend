@@ -3,9 +3,9 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   useWindowDimensions,
   ActivityIndicator,
+  FlatList, // 👇 1. استيراد FlatList
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./Cosmetics.styles";
@@ -68,18 +68,19 @@ const Cosmetics = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      {/* 👇 2. استخدام FlatList بدلاً من ScrollView */}
+      <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
+        data={products}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={[
           styles.scrollContainer,
           // تظبيط العرض في الشاشات الكبيرة
           isDesktop && { paddingBottom: 20 },
         ]}
-      >
-        {products.map((item) => (
+        renderItem={({ item }) => (
           <View
-            key={item.id}
             style={{
               // تظبيط عرض الكارت عشان يكون متناسق
               width: isDesktop ? 260 : 200,
@@ -99,8 +100,8 @@ const Cosmetics = () => {
               }}
             />
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 };

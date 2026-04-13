@@ -83,11 +83,11 @@ const Footer = () => {
               />
             </TouchableOpacity>
           </View>
-
+          {/* 
           <View style={styles.hotlineBox}>
             <Text style={styles.hotlineLabel}>EMERGENCY HOTLINE</Text>
-            <Text style={styles.hotlineNum}>19999</Text>
-          </View>
+            <Text style={styles.hotlineNum}></Text>
+          </View> */}
         </View>
       </View>
 

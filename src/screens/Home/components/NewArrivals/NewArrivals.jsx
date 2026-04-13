@@ -3,21 +3,20 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   useWindowDimensions,
   ActivityIndicator,
+  FlatList, // 👇 1. استيراد FlatList
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./NewArrivals.styles";
 import { COLORS } from "../../../../theme/colors";
 import { productService } from "../../../../services/productService";
-// استدعاء الكارت الاحترافي بتاعنا
 import ProductCard from "../../../../components/UI/ProductCard/ProductCard";
 
 const NewArrivals = () => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
-  const isMobile = width < 768; // عشان نبعتها للكارت
+  const isMobile = width < 768;
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,22 +68,22 @@ const NewArrivals = () => {
         </TouchableOpacity>
       </View>
 
-      {/* سكرول المنتجات */}
-      <ScrollView
+      {/* 👇 2. استخدام FlatList بدلاً من ScrollView */}
+      <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
+        data={products}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={[
           styles.scrollContainer,
           isDesktop && { paddingBottom: 20 },
         ]}
-      >
-        {products.map((item) => (
+        renderItem={({ item }) => (
           <View
-            key={item.id}
             style={{
-              width: isDesktop ? 260 : 200, // عرض متناسق للكارت
+              width: isDesktop ? 260 : 200,
               marginRight: 20,
-              paddingBottom: 15, // عشان ظل الكارت يبان
+              paddingBottom: 15,
             }}
           >
             <ProductCard
@@ -98,8 +97,8 @@ const NewArrivals = () => {
               }}
             />
           </View>
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 };

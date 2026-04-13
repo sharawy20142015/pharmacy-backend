@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import { View, Text, Image, Pressable, Platform } from "react-native";
+import React, { useState, memo } from "react"; // 👈 1. استيراد memo من React
+import { View, Text, Pressable, Platform } from "react-native";
+import { Image } from "expo-image";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import { styles } from "./ProductCard.styles";
 import { COLORS } from "../../../theme/colors";
-import { useCart } from "../../../context/CartContext"; // استدعاء السلة
+import { useCart } from "../../../context/CartContext";
 
 const ProductCard = ({
   item,
@@ -32,6 +33,7 @@ const ProductCard = ({
     item?.images?.[0] ||
     item?.img_url1 ||
     "https://via.placeholder.com/200";
+
   const brandName = item?.Brand_Name || item?.vendor || "GENERIC";
   const productName = item?.en_name || item?.name || "Unknown Product";
   const price = item?.final_price || item?.price || "0.00";
@@ -49,13 +51,15 @@ const ProductCard = ({
     >
       <View style={styles.imageWrapper}>
         <Image
-          source={{ uri: imageUri }}
+          source={imageUri}
           style={[
             styles.productImage,
             isHovered &&
               Platform.OS === "web" && { transform: [{ scale: 1.05 }] },
           ]}
-          resizeMode="contain"
+          contentFit="contain"
+          transition={200}
+          cachePolicy="memory-disk"
         />
 
         {item?.is_new_arrival === 1 && (
@@ -96,7 +100,7 @@ const ProductCard = ({
         <Pressable
           style={({ pressed }) => [
             styles.addToCartBtn,
-            isInCart && styles.removeFromCartBtn, // ستايل لو المنتج في السلة
+            isInCart && styles.removeFromCartBtn,
             pressed && { opacity: 0.8 },
             isHovered &&
               !isInCart &&
@@ -133,4 +137,5 @@ const ProductCard = ({
   );
 };
 
-export default ProductCard;
+// 👇 2. تغليف الكومبوننت بـ React.memo لمنع الـ Re-render غير الضروري
+export default memo(ProductCard);

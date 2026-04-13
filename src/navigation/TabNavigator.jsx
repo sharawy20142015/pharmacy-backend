@@ -4,7 +4,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Platform, View, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 
-// 1. استيراد المكونات والـ Context
+// استيراد المكونات والـ Context
 import LoadingScreen from "../components/UI/LoadingScreen/LoadingScreen";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -27,22 +27,45 @@ import { COLORS } from "../theme/colors";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// --- 1. الـ Stacks الفرعية ---
+// 🚀 1. كومبوننت معزول للـ Loading Overlay عشان نمنع الـ Re-render للـ Navigator كله
+const GlobalLoadingOverlay = () => {
+  const { isGlobalLoading } = useLoading();
+
+  if (!isGlobalLoading) return null;
+
+  return (
+    <View style={styles.overlayLoading}>
+      <LoadingScreen />
+    </View>
+  );
+};
+
+// --- الـ Stacks الفرعية ---
 const StoreStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      animationEnabled: Platform.OS !== "web", // 🚀 إيقاف الأنيميشن في الويب للسرعة
+    }}
+  >
     <Stack.Screen name="StoreMain" component={StoreScreen} />
     <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
   </Stack.Navigator>
 );
 
 const HomeStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false }}>
+  <Stack.Navigator
+    screenOptions={{
+      headerShown: false,
+      animationEnabled: Platform.OS !== "web",
+    }}
+  >
     <Stack.Screen name="HomeMain" component={HomeScreen} />
     <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
   </Stack.Navigator>
 );
 
-// --- 2. الـ Tab Navigator الموحد ---
+// --- الـ Tab Navigator الموحد ---
 const TabNavigator = () => {
   const { user } = useAuth();
   const { cartItems } = useCart();
@@ -112,20 +135,23 @@ const TabNavigator = () => {
   );
 };
 
-// --- 3. App Navigator الرئيسي (الحل الجذري هنا) ---
+// --- App Navigator الرئيسي ---
 const AppNavigator = () => {
   const { user, isLoading: authLoading } = useAuth();
-  const { isGlobalLoading } = useLoading();
+  // 🚀 شيلنا useLoading من هنا عشان ميعملش ريفريش للصفحة كلها
 
-  // الحالة الوحيدة اللي نمسح فيها الـ Navigator هي وقت الـ Auth في بداية تشغيل التطبيق
   if (authLoading) {
     return <LoadingScreen />;
   }
 
   return (
     <View style={{ flex: 1 }}>
-      {/* الـ Navigator هيفضل شغال في الخلفية ومش هيعمل Reset */}
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          animationEnabled: Platform.OS !== "web", // 🚀 إيقاف الأنيميشن في الويب للسرعة
+        }}
+      >
         <Stack.Screen name="MainTabs" component={TabNavigator} />
         {!user && <Stack.Screen name="Login" component={LoginScreen} />}
         <Stack.Group screenOptions={{ presentation: "card" }}>
@@ -142,22 +168,18 @@ const AppNavigator = () => {
         </Stack.Group>
       </Stack.Navigator>
 
-      {/* 🚀 الـ Global Spinner يظهر "فوق" الشاشات كـ Overlay */}
-      {isGlobalLoading && (
-        <View style={styles.overlayLoading}>
-          <LoadingScreen />
-        </View>
-      )}
+      {/* 🚀 الـ Overlay المعزول يشتغل لوحده فوق الشاشات */}
+      <GlobalLoadingOverlay />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   overlayLoading: {
-    ...StyleSheet.absoluteFillObject, // بيفرد الفيو على كامل الشاشة
-    backgroundColor: "rgba(255, 255, 255, 0.7)", // خلفية شفافة بسيطة عشان العميل يحس إنه لسه في نفس الصفحة
-    zIndex: 9999, // عشان يغطي أي حاجة تانية
-    elevation: 9999, // للأندرويد
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    zIndex: 9999,
+    elevation: 9999,
     justifyContent: "center",
     alignItems: "center",
   },
