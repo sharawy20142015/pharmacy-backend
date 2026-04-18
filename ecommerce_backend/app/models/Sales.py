@@ -21,7 +21,7 @@ class Sales(Base):
     extended_price = Column(Numeric(18, 2), default=0.00) 
     
     customer_code = Column(String(20))
-    customer_name = Column(String(100))
+    customer_name = Column(String(200))
     customer_governates = Column(String(50))
     customer_city = Column(String(50))
     customer_location = Column(Text)

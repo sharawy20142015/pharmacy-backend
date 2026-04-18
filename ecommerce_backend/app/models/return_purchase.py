@@ -19,7 +19,7 @@ class ReturnPurchase(Base):
     product_details = relationship('Product')
     
     supplier_code = Column(String(20))
-    supplier_name = Column(String(100))
+    supplier_name = Column(String(200))
     
     um = Column(String(3))
     quantity = Column(Numeric(18, 2), default=0.00) # الكمية Numeric للحفاظ على الدقة

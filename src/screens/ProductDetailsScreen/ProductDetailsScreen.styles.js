@@ -2,7 +2,7 @@ import { StyleSheet, Platform } from "react-native";
 
 const colors = {
   primary: "#11b67f",
-  bgLight: "#f8fafc", // لون أهدى وأنظف للخلفية
+  bgLight: "#f8fafc",
   bgDark: "#11211c",
   prescBlue: "#38BDF8",
   slate50: "#f8fafc",
@@ -42,7 +42,7 @@ export const styles = StyleSheet.create({
   rtlIcon: { transform: [{ scaleX: -1 }] },
   headerTitle: {
     fontSize: 18,
-    fontWeight: "800", // خلينا العنوان أتقل شوية
+    fontWeight: "800",
     color: colors.slate900,
     flex: 1,
     textAlign: "center",
@@ -64,7 +64,7 @@ export const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     alignItems: "flex-start",
     gap: 48,
-  }, // مسافة أكبر في الديسكتوب
+  },
   galleryCol: { width: "100%" },
   detailsCol: { width: "100%" },
 
@@ -72,8 +72,7 @@ export const styles = StyleSheet.create({
   imageBox: {
     backgroundColor: colors.white,
     aspectRatio: 1,
-    borderRadius: 32, // تدويرة أكبر وأشيك
-    // شيلنا الـ border وخلينا مكانه ظل خفيف جداً لنظافة التصميم
+    borderRadius: 32,
     elevation: 3,
     shadowColor: "#000",
     shadowOpacity: 0.04,
@@ -82,6 +81,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "visible",
+    padding: 16, // 👈 ضفنا بادينج خفيف هنا عشان الصورة تاخد براحها جوه الكارد
   },
   img3DWrapper: {
     width: "100%",
@@ -91,14 +91,13 @@ export const styles = StyleSheet.create({
     position: "relative",
   },
   mainImg: {
-    width: "60%",
-    height: "60%",
+    width: "100%", // 👈 كانت 60%، خليناها تملى المساحة
+    height: "100%", // 👈 كانت 60%
     zIndex: 10,
   },
-  // 👇 السر هنا: الصورة هتاخد 90% من المساحة في وضع الموبايل عشان تبان ضخمة وتخطف العين
   mainImgMobile: {
-    width: "90%",
-    height: "90%",
+    width: "100%", // 👈 كانت 90%
+    height: "100%", // 👈 كانت 90%
   },
   productFloorShadow: {
     position: "absolute",
@@ -112,15 +111,15 @@ export const styles = StyleSheet.create({
     zIndex: 1,
   },
   productFloorShadowMobile: {
-    width: 200, // ظل أكبر في الموبايل عشان يتناسب مع الصورة الأكبر
+    width: 200,
     bottom: "5%",
   },
   zoomBtn: {
     position: "absolute",
-    bottom: 16,
-    right: 16,
+    bottom: 0,
+    right: 0,
     backgroundColor: "rgba(255,255,255,0.9)",
-    padding: 10, // كبرنا الزرار شوية
+    padding: 10,
     borderRadius: 14,
     elevation: 5,
     shadowColor: "#000",
@@ -169,14 +168,14 @@ export const styles = StyleSheet.create({
   },
   trustText: {
     fontSize: 14,
-    fontWeight: "700", // قلناه لـ Bold
+    fontWeight: "700",
     color: colors.slate800,
     textAlign: "right",
   },
 
   // Details Card
   detailsCard: {
-    backgroundColor: "transparent", // شيلنا الخلفية البيضا والبوردر عشان تبان مدمجة وأشيك
+    backgroundColor: "transparent",
     padding: 8,
   },
   brandName: {
@@ -187,7 +186,7 @@ export const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   productTitle: {
-    fontSize: 26, // كبرنا اسم المنتج
+    fontSize: 26,
     fontWeight: "900",
     color: colors.slate900,
     marginTop: 8,
@@ -208,7 +207,7 @@ export const styles = StyleSheet.create({
     gap: 16,
     marginTop: 24,
   },
-  finalPrice: { fontSize: 38, fontWeight: "900", color: colors.primary }, // السعر بقى أضخم وأوضح
+  finalPrice: { fontSize: 38, fontWeight: "900", color: colors.primary },
   oldPrice: {
     fontSize: 20,
     color: colors.slate400,
@@ -216,40 +215,7 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Prescription Box
-  prescAlert: {
-    backgroundColor: "rgba(56, 189, 248, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(56, 189, 248, 0.3)",
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: "row-reverse",
-    alignItems: "flex-start",
-    gap: 12,
-    marginTop: 24,
-  },
-  prescTextCol: { flex: 1 },
-  prescTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.slate800,
-    textAlign: "right",
-  },
-  prescSub: {
-    fontSize: 12,
-    color: colors.slate600,
-    marginTop: 4,
-    textAlign: "right",
-  },
-  prescBtn: {
-    backgroundColor: colors.prescBlue,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  prescBtnText: { color: colors.white, fontSize: 14, fontWeight: "700" },
-
-  // --- Actions & Buttons ---
+  // Actions & Buttons
   purchaseControls: { flexDirection: "row-reverse", gap: 16, marginTop: 32 },
 
   addCartBtn: {
@@ -261,11 +227,11 @@ export const styles = StyleSheet.create({
     gap: 12,
     elevation: 4,
     shadowColor: colors.primary,
-    shadowOpacity: 0.25, // زودنا الشادو شوية للزراير الأساسية
+    shadowOpacity: 0.25,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
-  addCartText: { color: colors.white, fontSize: 16, fontWeight: "900" }, // Bold Text
+  addCartText: { color: colors.white, fontSize: 16, fontWeight: "900" },
 
   removeFromCartBtn: {
     backgroundColor: colors.dangerBg,
@@ -332,7 +298,7 @@ export const styles = StyleSheet.create({
   accordionTitle: { fontSize: 16, fontWeight: "800", color: colors.slate800 },
   accordionBody: { paddingHorizontal: 20, paddingBottom: 20 },
   accordionContent: {
-    fontSize: 15, // كبرنا الخط عشان يتقري أسهل
+    fontSize: 15,
     color: colors.slate600,
     lineHeight: 26,
     textAlign: "right",
@@ -369,8 +335,12 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
+    padding: 8, // 👈 ضفنا بادينج خفيف هنا
   },
-  altImg: { width: "80%", height: "80%" }, // خلينا صور البدائل أكبر شوية
+  altImg: {
+    width: "100%", // 👈 كانت 80%، كبرناها تملى البوكس
+    height: "100%", // 👈 كانت 80%
+  },
   altName: {
     fontSize: 16,
     fontWeight: "800",

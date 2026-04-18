@@ -27,7 +27,7 @@ class Purchase(Base):
     supplier_info = relationship("Supplier", back_populates="purchase_orders")
 
     supplier_code = Column(String(20))
-    supplier_name = Column(String(100))
+    supplier_name = Column(String(200))
     
     quantity = Column(Numeric(18, 2), default=0.00)
     um = Column(String(10))

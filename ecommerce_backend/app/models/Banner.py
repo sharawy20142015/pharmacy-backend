@@ -9,7 +9,7 @@ class Banner(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     image_url = Column(Text, nullable=False)
-    title = Column(String(100), nullable=True)
+    title = Column(String(200), nullable=True)
     subtitle = Column(String(150), nullable=True)
     
     # ❌ شيلنا الـ section القديم اللي كان String

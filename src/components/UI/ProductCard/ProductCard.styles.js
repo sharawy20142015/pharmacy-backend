@@ -1,15 +1,14 @@
 import { StyleSheet, Platform } from "react-native";
 import { COLORS } from "../../../theme/colors";
 
-// هنفترض اللون الأخضر من ثيم السيستم بتاعك أو هنحط لون افتراضي
-const THEME_GREEN = COLORS.primary || "#10b77f";
+const THEME_GREEN = COLORS?.primary || "#10b77f";
 
 export const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 12, // 👈 خليناه 12 عشان يبقى مودرن وشبه كارت المتجر
     borderWidth: 1,
-    borderColor: "#e2e8f0", // رمادي فاتح جداً
+    borderColor: "#e2e8f0",
     overflow: "hidden",
     flex: 1,
     // Transitions for Web
@@ -29,11 +28,11 @@ export const styles = StyleSheet.create({
   },
   imageWrapper: {
     aspectRatio: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#ffffff",
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
-    padding: 16,
+    padding: 2, // 👈 السر هنا: البادينج 2 بيخلي الصورة تفرش وتملى الكارت للآخر
     overflow: "hidden",
   },
   productImage: {
@@ -47,27 +46,43 @@ export const styles = StyleSheet.create({
   },
   badge: {
     position: "absolute",
-    top: 12,
-    left: 12,
+    top: 6, // 👈 رفعناه لفوق شوية
+    left: 6,
     backgroundColor: THEME_GREEN,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    zIndex: 10,
   },
   badgeText: {
     color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+  discountBadge: {
+    position: "absolute",
+    top: 6, // 👈 رفعناه لفوق شوية
+    right: 6,
+    backgroundColor: "#ef4444",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  discountBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "900",
   },
   wishlistBtn: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
+    top: 6,
+    right: 6,
+    width: 28, // 👈 صغرنا زرار الأمنيات
+    height: 28,
     backgroundColor: "#ffffff",
-    borderRadius: 16,
+    borderRadius: 14,
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#000",
@@ -75,43 +90,62 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    zIndex: 5,
   },
   detailsContainer: {
-    padding: 16,
+    padding: 10, // 👈 قللنا المساحة الداخلية للبيانات
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-between",
     flexGrow: 1,
   },
   brandText: {
-    fontSize: 12,
+    fontSize: 10, // 👈 خط أصغر
     color: "#64748b",
-    fontWeight: "600",
+    fontWeight: "800",
     textTransform: "uppercase",
-    marginBottom: 6,
+    marginBottom: 2,
+    textAlign: "left",
   },
   titleText: {
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 12, // 👈 صغرنا اسم المنتج عشان يتناسب مع الكارت
+    fontWeight: "800",
     color: "#0f172a",
-    lineHeight: 20,
-    height: 40, // يحافظ على ارتفاع ثابت لسطرين
-    marginBottom: 12,
+    lineHeight: 16,
+    minHeight: 32, // 👈 ارتفاع لسطرين فقط
+    marginBottom: 4,
+    textAlign: "left",
   },
   priceRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  priceColumn: {
+    flexDirection: "column",
+    justifyContent: "flex-end",
+  },
+  oldPrice: {
+    fontSize: 10,
+    color: "#94a3b8",
+    textDecorationLine: "line-through",
+    marginBottom: 1,
+  },
+  mainPriceRow: {
+    flexDirection: "row",
     alignItems: "baseline",
-    gap: 4,
-    marginBottom: 16,
+    gap: 2,
   },
   priceText: {
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 14, // 👈 السعر أصغر وأنعم
+    fontWeight: "900",
     color: THEME_GREEN,
   },
   currencyText: {
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 9,
+    fontWeight: "bold",
     color: THEME_GREEN,
   },
   addToCartBtn: {
@@ -121,9 +155,9 @@ export const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: THEME_GREEN,
-    paddingVertical: 10,
+    paddingVertical: 8, // 👈 رفعنا الزرار شوية (أنحف)
     borderRadius: 8,
-    gap: 8,
+    gap: 6,
     ...Platform.select({
       web: {
         transition: "all 0.3s ease",
@@ -135,7 +169,11 @@ export const styles = StyleSheet.create({
   },
   addToCartText: {
     color: THEME_GREEN,
-    fontSize: 14,
-    fontWeight: "700",
+    fontSize: 13, // 👈 خط الزرار أصغر
+    fontWeight: "800",
+  },
+  removeFromCartBtn: {
+    borderColor: "#ef4444",
+    backgroundColor: "#fef2f2",
   },
 });

@@ -7,7 +7,7 @@ export const styles = StyleSheet.create({
     alignSelf: "center",
     width: "100%",
     paddingVertical: 24,
-    paddingHorizontal: 24, // 🟢 زيادة المسافة الجانبية قليلاً
+    paddingHorizontal: 12,
   },
   toolsRow: {
     flexDirection: "row",
@@ -45,23 +45,23 @@ export const styles = StyleSheet.create({
   // --- Product Card Style Fixed ---
   productCard: {
     backgroundColor: "#fff",
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    overflow: "hidden", // 👈 يضمن عدم خروج المحتوى عن الزوايا المنحنية
-    marginBottom: 16,
+    overflow: "hidden",
+    marginBottom: 12,
     ...Platform.select({
-      web: { cursor: "pointer" },
+      web: { cursor: "pointer", transition: "all 0.3s ease" },
     }),
   },
   imageContainer: {
     width: "100%",
-    height: 240, // 👈 تحديد ارتفاع ثابت للصورة (يحل مشكلة الحجم الضخم)
-    backgroundColor: "#f8fafc",
+    aspectRatio: 1,
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
-    padding: 20, // 🟢 مساحة تنفس حول الصورة
+    padding: 2,
   },
   productImage: {
     width: "100%",
@@ -69,52 +69,95 @@ export const styles = StyleSheet.create({
   },
   stockBadge: {
     position: "absolute",
-    top: 12,
-    left: 12,
+    top: 6,
+    left: 6,
     backgroundColor: "#10b77f",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
     borderRadius: 4,
+    zIndex: 10,
   },
-  stockBadgeText: { color: "#fff", fontSize: 10, fontWeight: "900" },
+  stockBadgeText: {
+    color: "#fff",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0,
+  },
+
+  // 👇 ستايلات بادچ الخصم
+  discountBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: "#ef4444",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
+    zIndex: 10,
+  },
+  discountBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+
   infoContainer: {
-    padding: 16,
+    padding: 8,
     flex: 1,
     justifyContent: "space-between",
   },
-  textStack: { marginBottom: 12 },
+  textStack: { marginBottom: 6 },
   brandName: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "800",
     color: "#94a3b8",
     textTransform: "uppercase",
-    marginBottom: 4,
+    marginBottom: 2,
+    textAlign: "left",
   },
   enName: {
-    fontSize: 15,
+    fontSize: 11,
     fontWeight: "800",
     color: "#0f172a",
-    height: 44, // 👈 ارتفاع ثابت لسطرين
-    lineHeight: 22,
+    minHeight: 32,
+    lineHeight: 16,
+    textAlign: "left",
   },
+
+  // 👇 ستايلات عمود السعر
   priceContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
+    alignItems: "flex-end", // عشان السعر والزرار يبقوا على نفس الخط من تحت
+    marginTop: 4,
+  },
+  priceColumn: {
+    flexDirection: "column",
+    justifyContent: "flex-end",
+  },
+  oldPrice: {
+    fontSize: 10,
+    color: "#94a3b8",
+    textDecorationLine: "line-through", // خط الشطب
+    marginBottom: 1,
   },
   mainPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 2 },
-  finalPrice: { fontSize: 20, fontWeight: "900", color: "#10b77f" },
-  currency: { fontSize: 10, fontWeight: "bold", color: "#10b77f" },
+  finalPrice: { fontSize: 13, fontWeight: "900", color: "#10b77f" },
+  currency: { fontSize: 9, fontWeight: "bold", color: "#10b77f" },
+
   floatingAddBtn: {
-    width: 38,
-    height: 38,
+    width: 26,
+    height: 26,
     backgroundColor: "#10b77f",
-    borderRadius: 12,
+    borderRadius: 13,
     justifyContent: "center",
     alignItems: "center",
   },
-  floatingRemoveBtn: { backgroundColor: "#fee2e2" },
+  floatingRemoveBtn: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#ef4444",
+  },
 
   modalHeader: {
     flexDirection: "row",
@@ -125,4 +168,47 @@ export const styles = StyleSheet.create({
     borderBottomColor: "#e2e8f0",
   },
   modalTitle: { fontSize: 20, fontWeight: "bold", color: "#0f172a" },
+
+  // --- Pagination ---
+  paginationSection: {
+    marginTop: 32,
+    alignItems: "center",
+    paddingBottom: 20,
+  },
+  paginationRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  pageButton: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 12,
+  },
+  activePageButton: {
+    backgroundColor: "#10b77f",
+    borderColor: "#10b77f",
+  },
+  pageButtonText: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#64748b",
+  },
+  activePageButtonText: {
+    color: "#fff",
+  },
+  pageText: {
+    fontSize: 13,
+    color: "#94a3b8",
+    fontWeight: "600",
+  },
 });

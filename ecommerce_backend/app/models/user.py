@@ -33,9 +33,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # الإيميل nullable=True ليقبل العملاء الزوار أو التسجيل السريع بالهاتف لاحقاً
-    email = Column(String(100), unique=True, index=True, nullable=True)
+    email = Column(String(200), unique=True, index=True, nullable=True)
     
-    name = Column(String(100), nullable=True) 
+    name = Column(String(200), nullable=True) 
     avatar_url = Column(Text, nullable=True)  
     password = Column(String(255), nullable=True) 
     
@@ -109,8 +109,8 @@ class Address(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     customer_id = Column(Integer, ForeignKey('customers.id'), nullable=False)
     
-    governorate = Column(String(100), nullable=False)
-    city = Column(String(100), nullable=False)
+    governorate = Column(String(200), nullable=False)
+    city = Column(String(200), nullable=False)
     details = Column(String(255), nullable=False)
     phone = Column(String(20), nullable=False) 
     is_default = Column(Boolean, default=False) 
