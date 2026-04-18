@@ -17,10 +17,10 @@ class Category(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # 🚀 إضافة index=True لسرعة جلب المنتجات حسب اسم القسم
-    name = Column(String(100), nullable=False, index=True)
+    name = Column(String(200), nullable=False, index=True)
     
     # الـ Slug مهم جداً للروابط (URL) وعليه Index فعلاً لسرعة البحث
-    slug = Column(String(100), unique=True, index=True)
+    slug = Column(String(200), unique=True, index=True)
     
     # الربط الذاتي (Self-referential) للأقسام الرئيسية والفرعية
     parent_id = Column(Integer, ForeignKey('Category.id'), index=True)

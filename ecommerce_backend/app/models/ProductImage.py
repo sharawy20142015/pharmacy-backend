@@ -18,7 +18,7 @@ class ProductImage(Base):
     
     img_url = Column(Text, nullable=False)
     is_main = Column(Boolean, default=False, index=True) # ضفنا Index هنا كمان عشان سرعة جلب الصورة الأساسية فقط
-    alt_text = Column(String(100), nullable=True)
+    alt_text = Column(String(200), nullable=True)
 
     # --- العلاقات (Relationships) ---
     

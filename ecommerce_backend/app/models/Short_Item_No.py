@@ -10,16 +10,16 @@ class ShortItemNo(Base):
     short_item_no = Column(String(40), primary_key=True, nullable=False, index=True)
     
     # 🚀 الـ Indexes الجديدة هنا عشان سرعة البحث بالاسم
-    ar_name = Column(String(100), nullable=True, index=True) 
-    en_name = Column(String(100), nullable=True, index=True)
+    ar_name = Column(String(200), nullable=True, index=True) 
+    en_name = Column(String(200), nullable=True, index=True)
     
     description = Column(Text, nullable=True)
     
     # الماركة - عليه Index فعلاً وده ممتاز للفلترة
-    Brand_Name = Column(String(100), nullable=True, index=True)
+    Brand_Name = Column(String(200), nullable=True, index=True)
     
-    header = Column(String(100), nullable=True)
-    sub_header = Column(String(100), nullable=True)
+    header = Column(String(200), nullable=True)
+    sub_header = Column(String(200), nullable=True)
 
     # --- العلاقات (Relationships) ---
     

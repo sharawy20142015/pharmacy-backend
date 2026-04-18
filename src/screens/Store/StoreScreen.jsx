@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useRef,
-  ScrollView,
-} from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -14,8 +8,9 @@ import {
   Modal,
   FlatList,
   Pressable,
+  ScrollView,
 } from "react-native";
-import { Image } from "expo-image"; // 👈 استخدام expo-image للأداء والثبات
+import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   useNavigation,
@@ -38,7 +33,7 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
 
   const handleCartAction = (e) => {
-    e.stopPropagation(); // منع الانتقال للتفاصيل عند الضغط على زر السلة
+    e.stopPropagation();
     if (isInCart) {
       removeFromCart(item.id);
     } else {
@@ -49,6 +44,13 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
   const imageUri =
     item.images?.[0] || item.img_url1 || "https://via.placeholder.com/200";
 
+  // 👇 حساب نسبة الخصم
+  const hasDiscount =
+    item.price && item.final_price && item.price > item.final_price;
+  const discountPercentage = hasDiscount
+    ? Math.round(((item.price - item.final_price) / item.price) * 100)
+    : 0;
+
   return (
     <Pressable
       onPress={() =>
@@ -56,18 +58,24 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
       }
       style={[styles.productCard, { width: cardWidth }]}
     >
-      {/* حاوية الصورة - تم تحديد ارتفاع ثابت في الستايل */}
       <View style={styles.imageContainer}>
         <Image
           source={{ uri: imageUri }}
           style={styles.productImage}
-          contentFit="contain" // 👈 يضمن عدم تمدد الصورة خارج الحدود
+          contentFit="contain"
           transition={200}
           cachePolicy="memory-disk"
         />
         <View style={styles.stockBadge}>
           <Text style={styles.stockBadgeText}>IN STOCK</Text>
         </View>
+
+        {/* 👇 بادچ الخصم */}
+        {hasDiscount && (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.infoContainer}>
@@ -81,11 +89,23 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
         </View>
 
         <View style={styles.priceContainer}>
-          <View style={styles.mainPriceRow}>
-            <Text style={styles.finalPrice}>
-              {item.final_price?.toFixed(2)}
-            </Text>
-            <Text style={styles.currency}>EGP</Text>
+          {/* 👇 عمود السعر (القديم فوق والجديد تحت) */}
+          <View style={styles.priceColumn}>
+            {hasDiscount && (
+              <Text style={styles.oldPrice}>{item.price?.toFixed(2)} EGP</Text>
+            )}
+            <View style={styles.mainPriceRow}>
+              <Text
+                style={[styles.finalPrice, hasDiscount && { color: "#ef4444" }]}
+              >
+                {item.final_price?.toFixed(2)}
+              </Text>
+              <Text
+                style={[styles.currency, hasDiscount && { color: "#ef4444" }]}
+              >
+                EGP
+              </Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -97,7 +117,7 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
           >
             <MaterialIcons
               name={isInCart ? "remove-shopping-cart" : "shopping-cart"}
-              size={isMobile ? 18 : 22}
+              size={isMobile ? 14 : 18}
               color={isInCart ? "#ef4444" : "#fff"}
             />
           </TouchableOpacity>
@@ -132,14 +152,17 @@ const StoreScreen = () => {
 
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
+
+  // 👈 3 أعمدة للديسكتوب، و 2 للموبايل
   const numColumns = isDesktop ? 3 : 2;
+
   const sidebarWidth = isDesktop ? 288 : 0;
   const availableWidth =
     Math.min(width, 1440) - (isDesktop ? 48 : 24) - sidebarWidth;
   const cardWidth =
     Math.floor(
       (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
-    ) - 5;
+    ) - 2;
 
   useFocusEffect(
     useCallback(() => {
@@ -222,6 +245,37 @@ const StoreScreen = () => {
     }
   };
 
+  const renderPagination = () => {
+    const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
+    if (totalPages <= 1) return null;
+    let pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(
+        <TouchableOpacity
+          key={i}
+          style={[
+            styles.pageButton,
+            currentPage === i && styles.activePageButton,
+          ]}
+          onPress={() => {
+            setCurrentPage(i);
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+          }}
+        >
+          <Text
+            style={[
+              styles.pageButtonText,
+              currentPage === i && styles.activePageButtonText,
+            ]}
+          >
+            {i}
+          </Text>
+        </TouchableOpacity>,
+      );
+    }
+    return <View style={styles.paginationRow}>{pages}</View>;
+  };
+
   const ListHeader = () => (
     <View style={{ paddingTop: 5 }}>
       {!isDesktop && (
@@ -294,7 +348,9 @@ const StoreScreen = () => {
                   totalProductsCount={totalProducts}
                   onClearFilters={() => {
                     setActiveCategoryName(null);
+                    setActiveCategorySlug(null);
                     setSelectedBrands([]);
+                    setSearchQuery("");
                     setCurrentPage(1);
                   }}
                   onApplyFilters={() =>
@@ -330,6 +386,14 @@ const StoreScreen = () => {
                       />
                       <Text style={{ marginTop: 16, color: "#64748b" }}>
                         No products found
+                      </Text>
+                    </View>
+                  )}
+                  {renderPagination()}
+                  {products.length > 0 && (
+                    <View style={styles.paginationSection}>
+                      <Text style={styles.pageText}>
+                        Showing {products.length} of {totalProducts} products
                       </Text>
                     </View>
                   )}

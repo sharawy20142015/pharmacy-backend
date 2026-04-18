@@ -8,10 +8,10 @@ class Supplier(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     supplier_code = Column(String(20), unique=True, nullable=False)
-    supplier_name = Column(String(100), nullable=False)
-    contact_person = Column(String(100)) # الشخص المسؤول
+    supplier_name = Column(String(200), nullable=False)
+    contact_person = Column(String(200)) # الشخص المسؤول
     phone_number = Column(String(15))
-    email = Column(String(100))
+    email = Column(String(200))
     address = Column(Text)
     tax_number = Column(String(50)) # الرقم الضريبي (مهم للشركات)
     created_at = Column(DateTime, default=datetime.utcnow)

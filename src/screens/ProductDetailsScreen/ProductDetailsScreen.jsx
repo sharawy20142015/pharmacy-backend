@@ -247,8 +247,6 @@ const ProductDetailsScreen = () => {
                   )}
                 </View>
 
-                {/* تم حذف قسم Prescription Alert من هنا */}
-
                 {isDesktop && (
                   <View style={styles.purchaseControls}>
                     <QuantitySelector

@@ -26,8 +26,8 @@ class Order(Base):
     # بيانات الشحن (Snapshot)
     shipping_first_name = Column(String(50))
     shipping_last_name = Column(String(50))
-    shipping_governorate = Column(String(100))
-    shipping_city = Column(String(100))
+    shipping_governorate = Column(String(200))
+    shipping_city = Column(String(200))
     shipping_details = Column(Text)
     shipping_phone = Column(String(20))
 

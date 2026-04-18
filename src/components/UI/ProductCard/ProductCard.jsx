@@ -1,10 +1,18 @@
-import React, { useState, memo } from "react"; // 👈 1. استيراد memo من React
-import { View, Text, Pressable, Platform } from "react-native";
+import React, { useState, memo } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  Platform,
+  TouchableOpacity,
+} from "react-native";
 import { Image } from "expo-image";
 import { MaterialIcons, Feather } from "@expo/vector-icons";
 import { styles } from "./ProductCard.styles";
 import { COLORS } from "../../../theme/colors";
 import { useCart } from "../../../context/CartContext";
+
+const THEME_GREEN = COLORS?.primary || "#10b77f";
 
 const ProductCard = ({
   item,
@@ -20,7 +28,7 @@ const ProductCard = ({
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
 
   const handleCartAction = (e) => {
-    e.stopPropagation(); // منع الانتقال لصفحة التفاصيل
+    e.stopPropagation();
     if (isInCart) {
       removeFromCart(item.id);
     } else {
@@ -36,7 +44,14 @@ const ProductCard = ({
 
   const brandName = item?.Brand_Name || item?.vendor || "GENERIC";
   const productName = item?.en_name || item?.name || "Unknown Product";
-  const price = item?.final_price || item?.price || "0.00";
+
+  // 👇 لوجيك الخصم الموحد
+  const oldPrice = item?.price ? Number(item.price) : 0;
+  const finalPrice = item?.final_price ? Number(item.final_price) : oldPrice;
+  const hasDiscount = oldPrice > finalPrice;
+  const discountPercentage = hasDiscount
+    ? Math.round(((oldPrice - finalPrice) / oldPrice) * 100)
+    : 0;
 
   return (
     <Pressable
@@ -51,36 +66,47 @@ const ProductCard = ({
     >
       <View style={styles.imageWrapper}>
         <Image
-          source={imageUri}
+          source={{ uri: imageUri }}
           style={[
             styles.productImage,
             isHovered &&
               Platform.OS === "web" && { transform: [{ scale: 1.05 }] },
           ]}
-          contentFit="contain"
+          contentFit="contain" // 👈 بيضمن إن الصورة تفرد لأقصى حجم بدون قص
           transition={200}
           cachePolicy="memory-disk"
         />
 
-        {item?.is_new_arrival === 1 && (
+        {/* بادچ الوصول الحديث */}
+        {item?.is_new_arrival === 1 && !hasDiscount && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>NEW</Text>
           </View>
         )}
 
-        <Pressable
-          style={styles.wishlistBtn}
-          onPress={(e) => {
-            e.stopPropagation();
-            if (onToggleWishlist) onToggleWishlist(item);
-          }}
-        >
-          <Feather
-            name="heart"
-            size={18}
-            color={COLORS.slate600 || "#475569"}
-          />
-        </Pressable>
+        {/* 👇 بادچ الخصم الأحمر */}
+        {hasDiscount && (
+          <View style={styles.discountBadge}>
+            <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
+          </View>
+        )}
+
+        {/* زرار الأمنيات (يظهر إذا لم يكن هناك خصم) */}
+        {!hasDiscount && (
+          <Pressable
+            style={styles.wishlistBtn}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (onToggleWishlist) onToggleWishlist(item);
+            }}
+          >
+            <Feather
+              name="heart"
+              size={14}
+              color={COLORS.slate600 || "#475569"}
+            />
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.detailsContainer}>
@@ -92,32 +118,52 @@ const ProductCard = ({
         </Text>
 
         <View style={styles.priceRow}>
-          <Text style={styles.priceText}>{price}</Text>
-          <Text style={styles.currencyText}>EGP</Text>
+          {/* 👇 عمود السعر القديم والجديد */}
+          <View style={styles.priceColumn}>
+            {hasDiscount && (
+              <Text style={styles.oldPrice}>{oldPrice.toFixed(2)} EGP</Text>
+            )}
+            <View style={styles.mainPriceRow}>
+              <Text
+                style={[styles.priceText, hasDiscount && { color: "#ef4444" }]}
+              >
+                {finalPrice.toFixed(2)}
+              </Text>
+              <Text
+                style={[
+                  styles.currencyText,
+                  hasDiscount && { color: "#ef4444" },
+                ]}
+              >
+                {" "}
+                EGP
+              </Text>
+            </View>
+          </View>
         </View>
 
-        {/* زرار الإضافة/الإزالة من السلة */}
-        <Pressable
-          style={({ pressed }) => [
+        {/* زرار الإضافة/الإزالة من السلة (عريض في الرئيسية) */}
+        <TouchableOpacity
+          style={[
             styles.addToCartBtn,
             isInCart && styles.removeFromCartBtn,
-            pressed && { opacity: 0.8 },
             isHovered &&
               !isInCart &&
               Platform.OS === "web" &&
               styles.addToCartBtnHovered,
           ]}
           onPress={handleCartAction}
+          activeOpacity={0.8}
         >
           <MaterialIcons
             name={isInCart ? "remove-shopping-cart" : "shopping-cart"}
-            size={18}
+            size={16}
             color={
               isInCart
                 ? "#ef4444"
                 : isHovered && Platform.OS === "web"
                   ? "#fff"
-                  : COLORS.primary || "#10b77f"
+                  : THEME_GREEN
             }
           />
           <Text
@@ -131,11 +177,10 @@ const ProductCard = ({
           >
             {isInCart ? "Remove" : "Add to Cart"}
           </Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
     </Pressable>
   );
 };
 
-// 👇 2. تغليف الكومبوننت بـ React.memo لمنع الـ Re-render غير الضروري
 export default memo(ProductCard);
