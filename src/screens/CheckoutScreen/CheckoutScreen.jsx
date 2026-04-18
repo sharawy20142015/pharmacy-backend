@@ -23,6 +23,9 @@ import { styles, COLORS } from "./CheckoutScreen.styles";
 import ShippingForm from "./components/ShippingForm";
 import OrderSummary from "./components/OrderSummary";
 
+// 🟢 1. استيراد دالة التتبع
+import { logGTMEvent } from "../../utils/analytics";
+
 const CheckoutScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
@@ -41,7 +44,7 @@ const CheckoutScreen = () => {
   const [filteredCities, setFilteredCities] = useState([]);
   const [deliveryFee, setDeliveryFee] = useState(0);
 
-  // 🟢 الحالة المسؤولة عن وسيلة الدفع (Cash أو Wallet)
+  // الحالة المسؤولة عن وسيلة الدفع (Cash أو Wallet)
   const [paymentMethod, setPaymentMethod] = useState("Cash");
 
   const [addressData, setAddressData] = useState({
@@ -147,7 +150,6 @@ const CheckoutScreen = () => {
         (c) => String(c.id) === String(addressData.city),
       );
 
-      // 🟢 بناء الـ Payload النهائي - نضمن أن payment_method تأخذ القيمة الحالية من الـ state
       const orderPayload = {
         customer_id: currentUser?.id || currentUser?.user?.id || null,
         cart_items: itemsToRender.map((i) => ({
@@ -163,11 +165,9 @@ const CheckoutScreen = () => {
         shipping_details: addressData.details || "No details",
         shipping_phone: addressData.phone,
         shipping_fees: Number(deliveryFee),
-        payment_method: paymentMethod, // 👈 هذه القيمة ستكون إما "Cash" أو "Wallet"
+        payment_method: paymentMethod,
         coupon_code: null,
       };
-
-      console.log("🚀 FINAL ATTEMPT PAYLOAD:", orderPayload); // تأكد من الـ log في الـ Terminal
 
       const res = await apiClient.post("/orders/create", orderPayload);
 
@@ -176,12 +176,32 @@ const CheckoutScreen = () => {
         res.status === 201 ||
         res.data?.status === "success"
       ) {
+        // 🟢 2. إرسال حدث الشراء لـ GTM بعد التأكد من نجاح الطلب
+        try {
+          const purchasedItems = itemsToRender.map((item) => ({
+            item_id: item.id,
+            item_name: item.en_name || item.ar_name || item.title,
+            price: item.final_price || item.price,
+            quantity: item.qty || item.quantity || 1,
+          }));
+
+          logGTMEvent("purchase", {
+            transaction_id: res.data.order_number || "GUEST-" + Date.now(), // رقم الأوردر من الباك إند
+            value: total, // الإجمالي النهائي للطلب
+            currency: "EGP",
+            payment_type: paymentMethod, // طريقة الدفع المحددة
+            items: purchasedItems, // المنتجات اللي اشتراها
+          });
+        } catch (gtmError) {
+          console.error("GTM Purchase Event Error:", gtmError);
+        }
+
         if (!expressItem) clearCart();
         await AsyncStorage.removeItem("@express_checkout");
 
         navigation.navigate("SuccessScreen", {
           orderNumber: res.data.order_number,
-          paymentMethod: paymentMethod, // نمررها لصفحة النجاح لعرض رقم المحفظة
+          paymentMethod: paymentMethod,
           totalAmount: total,
           points: isUsingPoints ? 0 : Math.floor(total / 10),
         });
@@ -246,7 +266,7 @@ const CheckoutScreen = () => {
                 handleUseSavedAddress={() => {}}
               />
 
-              {/* 🟢 قسم اختيار وسيلة الدفع */}
+              {/* قسم اختيار وسيلة الدفع */}
               <View
                 style={{
                   marginTop: 20,

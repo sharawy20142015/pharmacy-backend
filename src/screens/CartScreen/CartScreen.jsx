@@ -109,7 +109,7 @@ const CartItem = ({ item, onUpdateQty, onRemove, isMobile }) => {
               </View>
               <TouchableOpacity
                 style={styles.removeBtn}
-                onPress={() => onRemove(item.id)}
+                onPress={() => onRemove(item.id)} // 🟢 الحدث هنا سيشغل GTM تلقائياً من الـ Context
               >
                 <MaterialIcons name="delete" size={18} color="#ef4444" />
                 <Text style={styles.removeText}>Remove</Text>
@@ -126,21 +126,21 @@ const CartItem = ({ item, onUpdateQty, onRemove, isMobile }) => {
 const CartScreen = () => {
   const { width } = useWindowDimensions();
   const navigation = useNavigation();
+
+  // 🟢 استدعاء الدوال من الـ Context (التي تحتوي الآن على منطق GTM)
   const { cartItems, updateQty, removeFromCart } = useCart();
   const [promoCode, setPromoCode] = useState("");
 
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
 
-  // حساب المجموع الفرعي فقط
   const subtotal = cartItems.reduce(
     (sum, item) => sum + (item.final_price ?? item.price ?? 0) * item.qty,
     0,
   );
 
-  // تم تصفير رسوم الشحن هنا لتظهر في الـ Checkout فقط
   const deliveryFee = 0;
-  const total = subtotal; // الإجمالي في السلة هو سعر المنتجات فقط
+  const total = subtotal;
 
   if (cartItems.length === 0) {
     return (
@@ -203,7 +203,7 @@ const CartScreen = () => {
                     key={item.id}
                     item={item}
                     onUpdateQty={updateQty}
-                    onRemove={removeFromCart}
+                    onRemove={removeFromCart} // 🟢 الربط هنا
                     isMobile={isMobile}
                   />
                 ))}
@@ -244,7 +244,6 @@ const CartScreen = () => {
                   </View>
                   <View style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>Delivery Fee</Text>
-                    {/* عرض نص توضيحي بدلاً من القيمة الثابتة */}
                     <Text
                       style={[
                         styles.breakdownVal,
