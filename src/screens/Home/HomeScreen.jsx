@@ -24,10 +24,9 @@ import Features from "./components/Features/Features";
 import FloatingButton from "./components/FloatingButton/FloatingButton";
 import Cosmetics from "./components/Cosmetics/Cosmetics";
 import SkinCareSection from "./components/SkinCare/SkinCareSection";
-import apiClient from "../../services/apiClient";
 
-// 4. استيراد خدمات جلب البيانات (APIs) - افترضنا أسماء الدوال بناءً على الشائع
-// ⚠️ تأكد من تعديل مسارات هذه الاستيرادات حسب هيكلة مشروعك
+// 🟢 التأكد من استيراد apiClient بشكل صحيح
+import apiClient from "../../services/apiClient";
 
 const HomeScreen = () => {
   // حالة التحميل الرئيسية
@@ -38,18 +37,17 @@ const HomeScreen = () => {
   const [categories, setCategories] = useState([]);
   const [newArrivals, setNewArrivals] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
-  // ضيف أي حالات تانية محتاجها للسكاشن بتاعتك
 
   // دالة لجلب كل البيانات مرة واحدة
   const fetchAllHomeData = async () => {
     try {
-      // بنستخدم Promise.all عشان يطلب كل الداتا في نفس اللحظة بالتوازي (أسرع بكتير)
+      // 🟢 تم تغيير 'api' إلى 'apiClient' لإصلاح الخطأ
       const [bannersRes, categoriesRes, newArrivalsRes, bestSellersRes] =
         await Promise.all([
-          api.get("/banners/home"), // جلب بانر الرئيسية
-          api.get("/categories/level-1"), // جلب الأقسام
-          api.get("/products/new-arrivals"), // جلب الأدوية الجديدة
-          api.get("/products/best-sellers"), // جلب الأكثر مبيعاً (كمثال)
+          apiClient.get("/banners/home"), // جلب بانر الرئيسية
+          apiClient.get("/categories/level-1"), // جلب الأقسام
+          apiClient.get("/products/new-arrivals"), // جلب الأدوية الجديدة
+          apiClient.get("/products/best-sellers"), // جلب الأكثر مبيعاً
         ]);
 
       // تخزين البيانات في الـ State
@@ -59,9 +57,8 @@ const HomeScreen = () => {
       setBestSellers(bestSellersRes.data || []);
     } catch (error) {
       console.log("❌ Error fetching home data:", error);
-      // ممكن تعرض Toast message هنا لو حابب
     } finally {
-      // 🚀 أول ما كل الداتا توصل، شيل شاشة "نبض صيدلية" واعرض المحتوى
+      // 🚀 أول ما كل الداتا توصل، شيل شاشة التحميل واعرض المحتوى
       setIsLoading(false);
     }
   };
@@ -70,15 +67,13 @@ const HomeScreen = () => {
     fetchAllHomeData();
   }, []);
 
-  // إذا كانت الصفحة في حالة تحميل، اعرض شاشة اللوجو والسبينر الفخمة
+  // إذا كانت الصفحة في حالة تحميل، اعرض شاشة اللوجو والسبينر
   if (isLoading) {
     return <LoadingScreen />;
   }
 
-  // إذا انتهى التحميل، اعرض الواجهة الكاملة مرسومة بالداتا
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* شريط الساعة والبطارية */}
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
       {/* الهيدر المتجاوب ثابت في الأعلى */}
@@ -88,32 +83,33 @@ const HomeScreen = () => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* الحاوية الرئيسية (بتلم المحتوى في الديسكتوب وتفرده في الموبايل) */}
+        {/* الحاوية الرئيسية */}
         <View style={styles.container}>
           <SearchBar />
 
           {/* تمرير الداتا للسكاشن */}
           <HeroBanner data={banners} />
 
-          {/* الكومبوننت الجديد */}
+          {/* الكومبوننت الخاص بطلب منتج ناقص */}
           <RequestProduct />
 
           <ShopByCategory data={categories} />
-          {/* <TrustedBrands /> */}
-          {/* <OffersSection /> */}
+
           <Cosmetics />
           <SkinCareSection />
+
           <NewArrivals data={newArrivals} />
           <BestSellers data={bestSellers} />
+
           <HealthTips />
           <Features />
         </View>
 
-        {/* الفوتر بره الـ container عشان ياخد العرض الكامل للشاشة */}
+        {/* الفوتر */}
         <Footer />
       </ScrollView>
 
-      {/* زرار الاستشارة العائم */}
+      {/* زرار الاستشارة العائم - قم بإلغاء الكومنت لتفعيله */}
       {/* <FloatingButton /> */}
     </SafeAreaView>
   );
