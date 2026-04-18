@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react"; // 🟢 ضفنا useEffect و useRef
 import { NavigationContainer } from "@react-navigation/native";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import * as Linking from "expo-linking";
@@ -11,6 +11,9 @@ import { LoadingProvider } from "./src/context/LoadingContext"; // 👈 الما
 // استيراد AppNavigator
 import AppNavigator from "./src/navigation/TabNavigator";
 
+// 🟢 استيراد دوال GTM اللي عملناها
+import { initGTM, logGTMEvent } from "./src/utils/analytics";
+
 const linking = {
   prefixes: [
     Linking.createURL("/"),
@@ -21,10 +24,7 @@ const linking = {
   ],
   config: {
     screens: {
-      // 1. مسار الأدمن
       AdminDashboard: "admin/dashboard",
-
-      // 2. مسارات العميل (داخل الـ TabNavigator)
       MainTabs: {
         path: "",
         screens: {
@@ -45,14 +45,8 @@ const linking = {
           },
         },
       },
-
-      // 3. مسار تسجيل الدخول
       Login: "login",
-
-      // 4. مسارات عامة
       ProductDetails: "product/:productId",
-
-      // 🟢 مسار الـ Checkout
       Checkout: {
         path: "checkout",
         parse: {
@@ -64,16 +58,22 @@ const linking = {
             data ? encodeURIComponent(JSON.stringify(data)) : "",
         },
       },
-
       SuccessScreen: "success",
-
-      // 👇 🟢 المسار الجديد لشاشة طلب المنتج
       RequestProductScreen: "request-product",
     },
   },
 };
 
 export default function App() {
+  // 🟢 إنشاء References عشان نتتبع مسار الشاشات
+  const navigationRef = useRef();
+  const routeNameRef = useRef();
+
+  // 🟢 حقن سكريبت جوجل أول ما التطبيق يفتح
+  useEffect(() => {
+    initGTM();
+  }, []);
+
   return (
     <GoogleOAuthProvider clientId="862508946163-tc53fo7jqb5ckq5tq48po8lqpimp8dnv.apps.googleusercontent.com">
       {/* 2. الـ LoadingProvider لازم يلف كل الـ Providers عشان يتحكم في الشاشة كلها */}
@@ -81,8 +81,28 @@ export default function App() {
         <AuthProvider>
           <CartProvider>
             <NavigationContainer
+              ref={navigationRef} // 🟢 ربط الـ Ref بالـ Navigation
               linking={linking}
               fallback={null} // يمنع الوميض الأبيض أثناء التحميل
+              // 🟢 تسجيل حدث (page_view) لأول شاشة تفتح
+              onReady={() => {
+                routeNameRef.current =
+                  navigationRef.current.getCurrentRoute().name;
+                logGTMEvent("page_view", { page_path: routeNameRef.current });
+              }}
+              // 🟢 تسجيل حدث (page_view) مع كل تغيير للشاشة
+              onStateChange={async () => {
+                const previousRouteName = routeNameRef.current;
+                const currentRouteName =
+                  navigationRef.current.getCurrentRoute().name;
+
+                if (previousRouteName !== currentRouteName) {
+                  logGTMEvent("page_view", { page_path: currentRouteName });
+                }
+
+                // تحديث اسم الشاشة للمرة الجاية
+                routeNameRef.current = currentRouteName;
+              }}
             >
               <AppNavigator />
             </NavigationContainer>
