@@ -123,14 +123,14 @@ const ShopByCategory = () => {
         ))}
 
         {/* View All Card */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={[styles.viewAllCard, getCardStyle()]}
           activeOpacity={0.6}
           onPress={() => navigation.navigate("Store")}
         >
           <MaterialIcons name="grid-view" size={36} color={COLORS.primary} />
           <Text style={styles.viewAllCardText}>All Categories</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
     </View>
   );

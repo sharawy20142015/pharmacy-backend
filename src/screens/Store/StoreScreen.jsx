@@ -9,14 +9,11 @@ import {
   FlatList,
   Pressable,
   ScrollView,
+  ActivityIndicator, // تم إضافته للتحميل المحلي
 } from "react-native";
 import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
-import {
-  useNavigation,
-  useRoute,
-  useFocusEffect,
-} from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { styles } from "./StoreScreen.styles";
 import Header from "../../components/UI/Header/Header";
 import Footer from "../../components/UI/Footer/Footer";
@@ -24,7 +21,6 @@ import FilterSidebar from "./FilterSidebar";
 import SearchBar from "../Home/components/SearchBar/SearchBar";
 import apiClient from "../../services/apiClient";
 import { useCart } from "../../context/CartContext";
-import { useLoading } from "../../context/LoadingContext";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
 // --- Product Card Component ---
@@ -44,7 +40,6 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
   const imageUri =
     item.images?.[0] || item.img_url1 || "https://via.placeholder.com/200";
 
-  // 👇 حساب نسبة الخصم
   const hasDiscount =
     item.price && item.final_price && item.price > item.final_price;
   const discountPercentage = hasDiscount
@@ -70,7 +65,6 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
           <Text style={styles.stockBadgeText}>IN STOCK</Text>
         </View>
 
-        {/* 👇 بادچ الخصم */}
         {hasDiscount && (
           <View style={styles.discountBadge}>
             <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
@@ -89,7 +83,6 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
         </View>
 
         <View style={styles.priceContainer}>
-          {/* 👇 عمود السعر (القديم فوق والجديد تحت) */}
           <View style={styles.priceColumn}>
             {hasDiscount && (
               <Text style={styles.oldPrice}>{item.price?.toFixed(2)} EGP</Text>
@@ -132,9 +125,11 @@ const StoreScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const flatListRef = useRef(null);
-  const { showLoading, hideLoading, isGlobalLoading } = useLoading();
 
+  // 1. استبدال الـ Global Loading بـ Local Loading لتحسين الأداء
   const [isFirstLoad, setIsFirstLoad] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -153,9 +148,7 @@ const StoreScreen = () => {
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
 
-  // 👈 3 أعمدة للديسكتوب، و 2 للموبايل
   const numColumns = isDesktop ? 3 : 2;
-
   const sidebarWidth = isDesktop ? 288 : 0;
   const availableWidth =
     Math.min(width, 1440) - (isDesktop ? 48 : 24) - sidebarWidth;
@@ -164,28 +157,31 @@ const StoreScreen = () => {
       (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
     ) - 2;
 
-  useFocusEffect(
-    useCallback(() => {
-      let shouldUpdate = false;
-      if (route.params?.search !== undefined) {
-        setSearchQuery(route.params.search);
-        shouldUpdate = true;
-      }
-      if (route.params?.categorySlug) {
-        setActiveCategorySlug(route.params.categorySlug);
-        setActiveCategoryName(route.params.categoryName);
-        shouldUpdate = true;
-      }
-      if (shouldUpdate) {
-        setCurrentPage(1);
-        navigation.setParams({
-          search: undefined,
-          categorySlug: undefined,
-          categoryName: undefined,
-        });
-      }
-    }, [route.params]),
-  );
+  // 2. إصلاح مشكلة الـ Focus Effect والدوران اللانهائي
+  useEffect(() => {
+    let shouldResetPage = false;
+
+    if (
+      route.params?.search !== undefined &&
+      route.params?.search !== searchQuery
+    ) {
+      setSearchQuery(route.params.search);
+      shouldResetPage = true;
+    }
+
+    if (
+      route.params?.categorySlug &&
+      route.params?.categorySlug !== activeCategorySlug
+    ) {
+      setActiveCategorySlug(route.params.categorySlug);
+      setActiveCategoryName(route.params.categoryName);
+      shouldResetPage = true;
+    }
+
+    if (shouldResetPage) {
+      setCurrentPage(1);
+    }
+  }, [route.params]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -198,7 +194,7 @@ const StoreScreen = () => {
         setAvailableCategoryNames(catResponse.data.map((c) => c.name));
         setAvailableBrands(brandResponse.data);
       } catch (error) {
-        console.error(error);
+        console.error("Initial Data Error:", error);
       }
     };
     fetchInitialData();
@@ -206,7 +202,7 @@ const StoreScreen = () => {
 
   const fetchProducts = useCallback(async () => {
     try {
-      showLoading();
+      setIsFetching(true);
       const offset = (currentPage - 1) * ITEMS_PER_PAGE;
       let queryStr = `?limit=${ITEMS_PER_PAGE}&offset=${offset}`;
       if (searchQuery) queryStr += `&search=${encodeURIComponent(searchQuery)}`;
@@ -222,10 +218,10 @@ const StoreScreen = () => {
       setProducts(data);
       setTotalProducts(response.data.total || data.length);
     } catch (error) {
-      console.error(error);
+      console.error("Fetch Products Error:", error);
     } finally {
       setIsFirstLoad(false);
-      hideLoading();
+      setIsFetching(false);
     }
   }, [activeCategorySlug, selectedBrands, currentPage, searchQuery]);
 
@@ -363,53 +359,65 @@ const StoreScreen = () => {
               </View>
             )}
 
-            <FlatList
-              ref={flatListRef}
-              data={products}
-              keyExtractor={(item) => item.id.toString()}
-              numColumns={numColumns}
-              key={numColumns}
-              columnWrapperStyle={{
-                gap: isDesktop ? 24 : 12,
-                justifyContent: "flex-start",
-              }}
-              contentContainerStyle={{ paddingBottom: 40 }}
-              ListHeaderComponent={ListHeader}
-              ListFooterComponent={
-                <View>
-                  {products.length === 0 && !isGlobalLoading && (
-                    <View style={{ alignItems: "center", marginTop: 50 }}>
-                      <MaterialIcons
-                        name="search-off"
-                        size={64}
-                        color="#cbd5e1"
-                      />
-                      <Text style={{ marginTop: 16, color: "#64748b" }}>
-                        No products found
-                      </Text>
-                    </View>
-                  )}
-                  {renderPagination()}
-                  {products.length > 0 && (
-                    <View style={styles.paginationSection}>
-                      <Text style={styles.pageText}>
-                        Showing {products.length} of {totalProducts} products
-                      </Text>
-                    </View>
-                  )}
-                  <Footer />
+            <View style={{ flex: 1 }}>
+              {isFetching && !isFirstLoad && (
+                <View style={{ padding: 10, alignItems: "center" }}>
+                  <ActivityIndicator size="small" color="#10b77f" />
                 </View>
-              }
-              renderItem={({ item }) => (
-                <ProductCard
-                  item={item}
-                  cardWidth={cardWidth}
-                  navigation={navigation}
-                  isMobile={isMobile}
-                />
               )}
-              showsVerticalScrollIndicator={false}
-            />
+              <FlatList
+                ref={flatListRef}
+                data={products}
+                keyExtractor={(item) => item.id.toString()}
+                numColumns={numColumns}
+                key={numColumns}
+                columnWrapperStyle={{
+                  gap: isDesktop ? 24 : 12,
+                  justifyContent: "flex-start",
+                }}
+                contentContainerStyle={{ paddingBottom: 40 }}
+                // 3. تحسينات أداء الـ FlatList
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={true}
+                ListHeaderComponent={ListHeader}
+                ListFooterComponent={
+                  <View>
+                    {products.length === 0 && !isFetching && (
+                      <View style={{ alignItems: "center", marginTop: 50 }}>
+                        <MaterialIcons
+                          name="search-off"
+                          size={64}
+                          color="#cbd5e1"
+                        />
+                        <Text style={{ marginTop: 16, color: "#64748b" }}>
+                          No products found
+                        </Text>
+                      </View>
+                    )}
+                    {renderPagination()}
+                    {products.length > 0 && (
+                      <View style={styles.paginationSection}>
+                        <Text style={styles.pageText}>
+                          Showing {products.length} of {totalProducts} products
+                        </Text>
+                      </View>
+                    )}
+                    <Footer />
+                  </View>
+                }
+                renderItem={({ item }) => (
+                  <ProductCard
+                    item={item}
+                    cardWidth={cardWidth}
+                    navigation={navigation}
+                    isMobile={isMobile}
+                  />
+                )}
+                showsVerticalScrollIndicator={false}
+              />
+            </View>
           </View>
         </View>
       </View>

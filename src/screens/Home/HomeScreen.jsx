@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { ScrollView, View, SafeAreaView, StatusBar } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  ScrollView,
+  View,
+  SafeAreaView,
+  StatusBar,
+  RefreshControl,
+} from "react-native";
 import { styles } from "./Home.styles";
 import { COLORS } from "../../theme/colors";
 
@@ -31,6 +37,8 @@ import apiClient from "../../services/apiClient";
 const HomeScreen = () => {
   // حالة التحميل الرئيسية
   const [isLoading, setIsLoading] = useState(true);
+  // 👈 حالة السحب للتحديث
+  const [refreshing, setRefreshing] = useState(false);
 
   // حالات تخزين البيانات (State)
   const [banners, setBanners] = useState([]);
@@ -39,15 +47,32 @@ const HomeScreen = () => {
   const [bestSellers, setBestSellers] = useState([]);
 
   // دالة لجلب كل البيانات مرة واحدة
-  const fetchAllHomeData = async () => {
+  const fetchAllHomeData = async (isRefreshing = false) => {
     try {
-      // 🟢 تم تغيير 'api' إلى 'apiClient' لإصلاح الخطأ
+      if (!isRefreshing) {
+        setIsLoading(true);
+      }
+
+      // 🚀 تعديل مهم جداً: ضفنا .catch لكل طلب لوحده
+      // كدة لو API واحد سقط، الباقي هيشتغل عادي جداً والصفحة مش هتبوظ
       const [bannersRes, categoriesRes, newArrivalsRes, bestSellersRes] =
         await Promise.all([
-          apiClient.get("/banners/home"), // جلب بانر الرئيسية
-          apiClient.get("/categories/level-1"), // جلب الأقسام
-          apiClient.get("/products/new-arrivals"), // جلب الأدوية الجديدة
-          apiClient.get("/products/best-sellers"), // جلب الأكثر مبيعاً
+          apiClient.get("/banners/home").catch((err) => {
+            console.log("Banners Error");
+            return { data: [] };
+          }),
+          apiClient.get("/categories/level-1").catch((err) => {
+            console.log("Categories Error");
+            return { data: [] };
+          }),
+          apiClient.get("/products/new-arrivals").catch((err) => {
+            console.log("New Arrivals Error");
+            return { data: [] };
+          }),
+          apiClient.get("/products/best-sellers").catch((err) => {
+            console.log("Best Sellers Error");
+            return { data: [] };
+          }),
         ]);
 
       // تخزين البيانات في الـ State
@@ -58,13 +83,20 @@ const HomeScreen = () => {
     } catch (error) {
       console.log("❌ Error fetching home data:", error);
     } finally {
-      // 🚀 أول ما كل الداتا توصل، شيل شاشة التحميل واعرض المحتوى
+      // 🚀 أول ما كل الداتا توصل، شيل شاشة التحميل واقفل علامة التحديث
       setIsLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchAllHomeData();
+  }, []);
+
+  // 👈 دالة تشغيل السحب للتحديث
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchAllHomeData(true);
   }, []);
 
   // إذا كانت الصفحة في حالة تحميل، اعرض شاشة اللوجو والسبينر
@@ -82,6 +114,14 @@ const HomeScreen = () => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        // 👈 ضفنا السحب للتحديث هنا
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]} // لون التحميل
+          />
+        }
       >
         {/* الحاوية الرئيسية */}
         <View style={styles.container}>
