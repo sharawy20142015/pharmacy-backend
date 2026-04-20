@@ -51,7 +51,8 @@ export const styles = StyleSheet.create({
   headerActions: { flexDirection: "row-reverse", gap: 8 },
 
   // Layout
-  scrollContent: { paddingBottom: 100 },
+  // 👈 زودنا الـ paddingBottom هنا عشان الفوتر الموبايل ميغطيش على آخر الصفحة
+  scrollContent: { paddingBottom: 120 },
   mainWrapper: {
     maxWidth: 1280,
     alignSelf: "center",
@@ -81,7 +82,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "visible",
-    padding: 16, // 👈 ضفنا بادينج خفيف هنا عشان الصورة تاخد براحها جوه الكارد
+    padding: 16,
   },
   img3DWrapper: {
     width: "100%",
@@ -91,13 +92,13 @@ export const styles = StyleSheet.create({
     position: "relative",
   },
   mainImg: {
-    width: "100%", // 👈 كانت 60%، خليناها تملى المساحة
-    height: "100%", // 👈 كانت 60%
+    width: "100%",
+    height: "100%",
     zIndex: 10,
   },
   mainImgMobile: {
-    width: "100%", // 👈 كانت 90%
-    height: "100%", // 👈 كانت 90%
+    width: "100%",
+    height: "100%",
   },
   productFloorShadow: {
     position: "absolute",
@@ -215,29 +216,66 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Actions & Buttons
+  // Actions & Buttons (Desktop & Shared)
   purchaseControls: { flexDirection: "row-reverse", gap: 16, marginTop: 32 },
 
   addCartBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 16,
+    borderRadius: 14, // 👈 توحيد حواف الزراير
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
-    elevation: 4,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    gap: 8, // 👈 تقليل الفراغ الداخلي عشان الموبايل
   },
-  addCartText: { color: colors.white, fontSize: 16, fontWeight: "900" },
+  addCartText: { color: colors.white, fontSize: 15, fontWeight: "900" }, // 👈 تصغير الفونت درجة
 
   removeFromCartBtn: {
     backgroundColor: colors.dangerBg,
     borderColor: colors.dangerBorder,
     borderWidth: 1,
     shadowColor: "#ef4444",
+  },
+
+  // --- Mobile Footer Specific Styles ---
+  mobileFooter: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%", // 👈 بدل left و right
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: colors.slate200,
+    paddingHorizontal: 16,
+    paddingVertical: 12, // 👈 مساحة داخلية متناسقة
+    paddingBottom: Platform.OS === "ios" ? 24 : 12, // 👈 احترام الـ SafeArea
+    flexDirection: "row-reverse", // 👈 تخطيط عربي صح
+    alignItems: "center",
+    justifyContent: "space-between", // 👈 توزيع العناصر يمين وشمال
+    zIndex: 100,
+    elevation: 15, // 👈 ضل أقوى شوية للفوتر
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -3 },
+  },
+  mobileButtonsContainer: {
+    flex: 1,
+    flexDirection: "row-reverse",
+    gap: 8,
+    marginLeft: 12, // 👈 مسافة بين الزراير والكمية
+  },
+  mobileBuyNowBtn: {
+    flex: 2,
+    height: 48, // 👈 توحيد الارتفاع لكل الزراير والكمية
+    elevation: 2,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.2,
+  },
+  mobileCartIconBtn: {
+    flex: 1,
+    height: 48,
+    elevation: 0,
+    shadowOpacity: 0,
+    borderWidth: 1,
   },
   mobileAddToCartBtn: {
     backgroundColor: colors.slate50,
@@ -247,32 +285,34 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.dangerBg,
     borderColor: colors.dangerBorder,
   },
+  mobileQtyContainer: {
+    width: 105, // 👈 عرض ثابت ومناسب لأداة الكمية
+  },
 
+  // --- Quantity Selector ---
   qtyBox: {
     flexDirection: "row-reverse",
     alignItems: "center",
+    justifyContent: "space-between", // 👈 توزيع جوه المربع
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.slate200,
-    borderRadius: 16,
-    padding: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
-    elevation: 1,
+    borderRadius: 14,
+    padding: 2, // 👈 بادينج خفيف
+    height: 48, // 👈 نفس ارتفاع الزراير بالظبط!
   },
   qtyBtn: {
-    width: 44,
-    height: 44,
+    width: 36, // 👈 حجم مناسب للمس
+    height: 42,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.slate50,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   qtyText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "900",
-    width: 48,
+    flex: 1, // 👈 تاخد المساحة الفاضية
     textAlign: "center",
     color: colors.slate900,
   },
@@ -335,11 +375,11 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
-    padding: 8, // 👈 ضفنا بادينج خفيف هنا
+    padding: 8,
   },
   altImg: {
-    width: "100%", // 👈 كانت 80%، كبرناها تملى البوكس
-    height: "100%", // 👈 كانت 80%
+    width: "100%",
+    height: "100%",
   },
   altName: {
     fontSize: 16,
@@ -365,25 +405,5 @@ export const styles = StyleSheet.create({
     backgroundColor: "rgba(17, 182, 127, 0.1)",
     padding: 12,
     borderRadius: 14,
-  },
-
-  // Mobile Footer
-  mobileFooter: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.slate200,
-    padding: 16,
-    paddingBottom: Platform.OS === "ios" ? 32 : 16,
-    flexDirection: "row-reverse",
-    gap: 16,
-    zIndex: 100,
-    elevation: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 15,
   },
 });

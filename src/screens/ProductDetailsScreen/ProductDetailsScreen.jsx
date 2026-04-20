@@ -5,20 +5,18 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
-  Image,
   useWindowDimensions,
   Platform,
   Pressable,
+  ActivityIndicator, // 👈 ضفنا ده عشان التحميل المحلي
 } from "react-native";
+import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { styles } from "./ProductDetailsScreen.styles";
 import { productService } from "../../services/productService";
 import { useCart } from "../../context/CartContext";
 import Footer from "../../components/UI/Footer/Footer";
-
-// 🚀 استيراد كونتكست التحميل وشاشة اللوجو
-import { useLoading } from "../../context/LoadingContext";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
 const ProductDetailsScreen = () => {
@@ -29,9 +27,8 @@ const ProductDetailsScreen = () => {
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
 
-  // 🚀 استخدام دوال التحميل
-  const { showLoading, hideLoading } = useLoading();
-  const [isFirstLoad, setIsFirstLoad] = useState(true);
+  // 👈 1. استخدمنا Loading محلي بدل الـ Global Context
+  const [isLoading, setIsLoading] = useState(true);
 
   const [product, setProduct] = useState(null);
   const [activeImg, setActiveImg] = useState(0);
@@ -59,39 +56,49 @@ const ProductDetailsScreen = () => {
     }
   };
 
-  // 🚀 جلب تفاصيل المنتج والمنتجات ذات الصلة
+  // جلب تفاصيل المنتج والمنتجات ذات الصلة
+  // جلب تفاصيل المنتج والمنتجات ذات الصلة
   useEffect(() => {
     const getDetails = async () => {
       if (!productId) return;
-      try {
-        showLoading();
-        const responseData = await productService.getProductById(productId);
 
-        if (responseData) {
-          setProduct(responseData);
+      try {
+        setIsLoading(true);
+
+        // 1. نجيب تفاصيل المنتج الأول عشان نعرف هو تبع قسم إيه
+        const productData = await productService.getProductById(productId);
+
+        if (productData) {
+          setProduct(productData); // بنحفظ المنتج في الـ State عشان نعرضه
+
+          // 2. نستخرج الـ Slug بتاع القسم من البيانات اللي لسه راجعة (مش من الـ state)
+          const categorySlug = productData.categories?.[0]?.slug;
+
+          // 3. نجيب المنتجات المشابهة بناءً على القسم ده مع تحديد الحد الأقصى (Limit)
           const allProducts = await productService.getAllProducts({
             is_active: 1,
+            limit: 10,
+            ...(categorySlug && { category_slug: categorySlug }), // لو القسم موجود ابعته
           });
+
           if (allProducts && allProducts.length > 0) {
+            // فلترة المنتجات عشان نشيل المنتج الحالي وناخد 5 بس
             const filteredRelated = allProducts
               .filter((p) => p.id !== productId)
               .slice(0, 5);
             setRelatedProducts(filteredRelated);
           }
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 150));
       } catch (error) {
         console.error("Fetch Error:", error);
       } finally {
-        setIsFirstLoad(false);
-        hideLoading();
+        setIsLoading(false);
       }
     };
+
     getDetails();
   }, [productId]);
-
-  if (isFirstLoad) {
+  if (isLoading) {
     return <LoadingScreen />;
   }
 
@@ -140,7 +147,7 @@ const ProductDetailsScreen = () => {
       >
         <View style={styles.mainWrapper}>
           <View style={[styles.gridContainer, isDesktop && styles.desktopGrid]}>
-            {/* قسم الصور */}
+            {/* 1. قسم الصور */}
             <View style={[styles.galleryCol, isDesktop && { flex: 7 }]}>
               <Pressable style={styles.imageBox}>
                 {({ hovered }) => (
@@ -213,17 +220,11 @@ const ProductDetailsScreen = () => {
                 </ScrollView>
               )}
 
-              <View style={styles.trustMarkers}>
-                <TrustItem
-                  icon="verified-user"
-                  text="موثق من قبل صيادلة مرخصين"
-                />
-                <TrustItem icon="thermostat" text="توصيل مبرد ومراقب حرارياً" />
-                <TrustItem icon="bolt" text="توصيل سريع خلال ساعة واحدة" />
-              </View>
+              {/* تظهر هنا في حالة الديسكتوب فقط */}
+              {isDesktop && <TrustMarkersList />}
             </View>
 
-            {/* قسم التفاصيل */}
+            {/* 2. قسم التفاصيل */}
             <View style={[styles.detailsCol, isDesktop && { flex: 5 }]}>
               <View style={styles.detailsCard}>
                 <Text style={styles.brandName}>
@@ -309,6 +310,9 @@ const ProductDetailsScreen = () => {
                   content={product.sub_header || "يرجى استشارة الطبيب المختص."}
                 />
               </View>
+
+              {/* تظهر هنا في حالة الموبايل والتابلت (تحت الأكورديون) */}
+              {!isDesktop && <TrustMarkersList />}
             </View>
           </View>
 
@@ -350,14 +354,19 @@ const ProductDetailsScreen = () => {
       {/* الفوتر الخاص بالموبايل */}
       {!isDesktop && (
         <View style={styles.mobileFooter}>
-          <QuantitySelector quantity={quantity} setQuantity={setQuantity} />
-          <View
-            style={{ flexDirection: "row", flex: 1, marginLeft: 12, gap: 8 }}
-          >
+          <View style={styles.mobileButtonsContainer}>
+            <TouchableOpacity
+              style={[styles.addCartBtn, styles.mobileBuyNowBtn]}
+              onPress={handleBuyNow}
+            >
+              <MaterialIcons name="flash-on" size={22} color="#fff" />
+              <Text style={styles.addCartText}>شراء الآن</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
                 styles.addCartBtn,
-                { flex: 1, borderWidth: 1 },
+                styles.mobileCartIconBtn,
                 isInCart
                   ? styles.mobileRemoveFromCartBtn
                   : styles.mobileAddToCartBtn,
@@ -370,14 +379,10 @@ const ProductDetailsScreen = () => {
                 color={isInCart ? "#ef4444" : "#11b67f"}
               />
             </TouchableOpacity>
+          </View>
 
-            <TouchableOpacity
-              style={[styles.addCartBtn, { flex: 2 }]}
-              onPress={handleBuyNow}
-            >
-              <MaterialIcons name="flash-on" size={22} color="#fff" />
-              <Text style={styles.addCartText}>شراء الآن</Text>
-            </TouchableOpacity>
+          <View style={styles.mobileQtyContainer}>
+            <QuantitySelector quantity={quantity} setQuantity={setQuantity} />
           </View>
         </View>
       )}
@@ -386,6 +391,14 @@ const ProductDetailsScreen = () => {
 };
 
 // --- Sub Components ---
+const TrustMarkersList = () => (
+  <View style={styles.trustMarkers}>
+    <TrustItem icon="verified-user" text="موثق من قبل صيادلة مرخصين" />
+    <TrustItem icon="thermostat" text="توصيل مبرد ومراقب حرارياً" />
+    <TrustItem icon="bolt" text="توصيل سريع خلال ساعة واحدة" />
+  </View>
+);
+
 const TrustItem = ({ icon, text }) => (
   <View style={styles.trustItem}>
     <View style={styles.trustIconBg}>
@@ -401,14 +414,14 @@ const QuantitySelector = ({ quantity, setQuantity }) => (
       onPress={() => setQuantity((q) => Math.max(1, q - 1))}
       style={styles.qtyBtn}
     >
-      <MaterialIcons name="remove" size={24} color="#475569" />
+      <MaterialIcons name="remove" size={20} color="#475569" />
     </TouchableOpacity>
     <Text style={styles.qtyText}>{quantity}</Text>
     <TouchableOpacity
       onPress={() => setQuantity((q) => q + 1)}
       style={styles.qtyBtn}
     >
-      <MaterialIcons name="add" size={24} color="#475569" />
+      <MaterialIcons name="add" size={20} color="#475569" />
     </TouchableOpacity>
   </View>
 );
