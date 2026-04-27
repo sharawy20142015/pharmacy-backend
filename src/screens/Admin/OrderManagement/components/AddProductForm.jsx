@@ -54,8 +54,10 @@ const AddProductForm = ({ isLargeScreen }) => {
     en_name: "",
     brand_name: "",
     description: "",
+    dosage: "",
+    usage_instructions: "",
     header: "",
-    sub_header: "",
+    sub_header: "", // 👈 موجودة في الـ State
     price: "",
     discount_percentage: "0",
     discount_value: "0",
@@ -155,7 +157,7 @@ const AddProductForm = ({ isLargeScreen }) => {
           />
           <CustomInput
             width={colHalf}
-            label="تصنيف فرعي (وصف)"
+            label="تبع انهي قسم زي New Arrival / Best Sellers"
             value={productForm.classification}
             onChangeText={(t) => updateForm("classification", t)}
           />
@@ -237,15 +239,35 @@ const AddProductForm = ({ isLargeScreen }) => {
       {/* 4. الصور والوصف */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>بيانات إضافية</Text>
+
+        {/* 👈 التعديل هنا: تغيير اسم الحقل وتفعيل الـ multiline */}
         <CustomInput
-          label="رابط صورة المنتج الرئيسية (URL)"
+          label="روابط صور المنتج (افصل بينها بـ | )"
+          multiline={true}
           value={productForm.main_image_url}
           onChangeText={(t) => updateForm("main_image_url", t)}
         />
+
         <CustomInput
-          label="عنوان تسويقي فرعي (Header)"
+          label="اسم المنتج (Header)"
           value={productForm.header}
           onChangeText={(t) => updateForm("header", t)}
+        />
+        <CustomInput
+          label="وصف فرعي تحت الاسم (Sub Header)"
+          value={productForm.sub_header}
+          onChangeText={(t) => updateForm("sub_header", t)}
+        />
+        <CustomInput
+          label="الجرعة"
+          value={productForm.dosage}
+          onChangeText={(t) => updateForm("dosage", t)}
+        />
+        <CustomInput
+          label="طريقة الاستخدام"
+          multiline
+          value={productForm.usage_instructions}
+          onChangeText={(t) => updateForm("usage_instructions", t)}
         />
         <CustomInput
           label="وصف المنتج التفصيلي"

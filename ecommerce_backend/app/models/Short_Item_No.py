@@ -15,6 +15,11 @@ class ShortItemNo(Base):
     
     description = Column(Text, nullable=True)
     
+    # 👇 -------------- الأعمدة الجديدة اللي طلبتها -------------- 👇
+    dosage = Column(String(255), nullable=True) # الجرعة
+    usage_instructions = Column(Text, nullable=True) # طريقة استخدام المنتج
+    # 👆 -------------------------------------------------------- 👆
+    
     # الماركة - عليه Index فعلاً وده ممتاز للفلترة
     Brand_Name = Column(String(200), nullable=True, index=True)
     

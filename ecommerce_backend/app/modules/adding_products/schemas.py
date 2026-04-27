@@ -21,3 +21,5 @@ class ProductAdminCreate(BaseModel):
     is_new_arrival: bool = False
     category_ids: List[int] = []
     main_image_url: Optional[str] = None
+    dosage: Optional[str] = None
+    usage_instructions: Optional[str] = None

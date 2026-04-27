@@ -43,7 +43,6 @@ export const productService = {
       // معالجة لستة المنتجات اللي راجعة
       const data = response.data.products.map((product) => ({
         ...product,
-        // معالجة الصور لو كانت مصفوفة أو صورة واحدة
         displayImage: productService.formatImageUrl(
           product.img_url1 || product.img_url,
         ),
@@ -70,10 +69,33 @@ export const productService = {
       const response = await apiClient.get(`/products/${productId}`);
       const data = response.data;
 
-      // تنسيق الصور داخل تفاصيل المنتج
-      if (data && data.img_url1) {
-        data.img_url1 = productService.formatImageUrl(data.img_url1);
+      // 🌟 التعديل هنا: تجميع كل الصور الممكنة في مصفوفة واحدة ديناميكية
+      let allImages = [];
+
+      // أ. سحب الصور الفردية لو موجودة
+      ["img_url1", "img_url2", "img_url3", "img_url4"].forEach((key) => {
+        if (data[key]) {
+          allImages.push(productService.formatImageUrl(data[key]));
+        }
+      });
+
+      // ب. سحب الصور الإضافية (مهما كان عددها 10, 20, 100 صورة)
+      const extraImages = data.additional_images || data.images || [];
+      if (Array.isArray(extraImages)) {
+        extraImages.forEach((img) => {
+          // التعامل مع هيكل الصورة سواء كان نص مباشر أو كائن جواه مسار الصورة
+          const imgPath =
+            typeof img === "string"
+              ? img
+              : img.url || img.image_path || img.image_url || img;
+          if (imgPath) {
+            allImages.push(productService.formatImageUrl(imgPath));
+          }
+        });
       }
+
+      // ج. إزالة الصور المتكررة (عشان لو الباك إند باعت نفس الصورة مرتين) وإزالة القيم الفارغة
+      data.images = [...new Set(allImages)].filter(Boolean);
 
       return data;
     } catch (error) {
