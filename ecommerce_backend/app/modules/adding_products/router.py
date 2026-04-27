@@ -40,7 +40,9 @@ async def create_product_from_admin(
             description=payload.description,
             Brand_Name=payload.brand_name,
             header=payload.header,
-            sub_header=payload.sub_header
+            sub_header=payload.sub_header,
+            dosage=payload.dosage,                           # 👈 تم إضافة الجرعة
+            usage_instructions=payload.usage_instructions    # 👈 تم إضافة طريقة الاستخدام
         )
 
         # 🟢 ربط الفئات (Many-to-Many)
@@ -78,15 +80,19 @@ async def create_product_from_admin(
         new_product.calculate_final_price()
         db.add(new_product)
 
-        # 4. إضافة الصورة الرئيسية (ProductImage)
+        # 4. إضافة الصور (ProductImage) مع دعم أكثر من صورة باستخدام |
         if payload.main_image_url:
-            new_image = ProductImage(
-                short_item_no=payload.short_item_no,
-                img_url=payload.main_image_url,
-                is_main=True,
-                alt_text=payload.ar_name 
-            )
-            db.add(new_image)
+            # تقسيم النص بناءً على علامة | ومسح المسافات الزايدة
+            image_urls = [url.strip() for url in payload.main_image_url.split('|') if url.strip()]
+            
+            for index, url in enumerate(image_urls):
+                new_image = ProductImage(
+                    short_item_no=payload.short_item_no,
+                    img_url=url,
+                    is_main=(index == 0), # 👈 الصورة الأولى فقط هي الرئيسية، الباقي صور إضافية
+                    alt_text=payload.ar_name 
+                )
+                db.add(new_image)
 
         # 5. حفظ كل التغييرات في الجداول الثلاثة وجدول الربط مرة واحدة
         await db.commit()

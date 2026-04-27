@@ -51,8 +51,7 @@ export const styles = StyleSheet.create({
   headerActions: { flexDirection: "row-reverse", gap: 8 },
 
   // Layout
-  // 👈 زودنا الـ paddingBottom هنا عشان الفوتر الموبايل ميغطيش على آخر الصفحة
-  scrollContent: { paddingBottom: 120 },
+  scrollContent: { paddingBottom: 60 },
   mainWrapper: {
     maxWidth: 1280,
     alignSelf: "center",
@@ -60,7 +59,7 @@ export const styles = StyleSheet.create({
     padding: 16,
     paddingTop: 24,
   },
-  gridContainer: { flexDirection: "column", gap: 32 },
+  gridContainer: { flexDirection: "column", gap: 24 },
   desktopGrid: {
     flexDirection: "row-reverse",
     alignItems: "flex-start",
@@ -69,7 +68,7 @@ export const styles = StyleSheet.create({
   galleryCol: { width: "100%" },
   detailsCol: { width: "100%" },
 
-  // --- Image Gallery Premium Styles ---
+  // --- Image Gallery Styles ---
   imageBox: {
     backgroundColor: colors.white,
     aspectRatio: 1,
@@ -79,14 +78,17 @@ export const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 15,
     shadowOffset: { width: 0, height: 8 },
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "visible",
     padding: 16,
+    position: "relative",
+  },
+  imageBoxMobile: {
+    padding: 8,
+    paddingBottom: 16, // عشان نسيب مكان للنقط
+    borderRadius: 24,
   },
   img3DWrapper: {
     width: "100%",
-    height: "100%",
+    height: "90%", // قللنا الارتفاع شوية عشان النقط اللي تحتها تبان
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
@@ -97,12 +99,12 @@ export const styles = StyleSheet.create({
     zIndex: 10,
   },
   mainImgMobile: {
-    width: "100%",
-    height: "100%",
+    width: "90%",
+    height: "90%",
   },
   productFloorShadow: {
     position: "absolute",
-    bottom: "10%",
+    bottom: "2%",
     width: 150,
     height: 12,
     backgroundColor: "#000",
@@ -112,25 +114,57 @@ export const styles = StyleSheet.create({
     zIndex: 1,
   },
   productFloorShadowMobile: {
-    width: 200,
-    bottom: "5%",
+    width: "60%",
+    bottom: "0%",
+    height: 8,
   },
-  zoomBtn: {
+
+  // 👈 ستايل الأسهم الجانبية
+  arrowBtn: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
+    top: "45%", // توسيط عمودي
+    width: 44,
+    height: 44,
     backgroundColor: "rgba(255,255,255,0.9)",
-    padding: 10,
-    borderRadius: 14,
-    elevation: 5,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
     zIndex: 20,
+  },
+  arrowLeft: { left: 10 },
+  arrowRight: { right: 10 },
+
+  // 👈 ستايل نقاط الترقيم
+  dotsContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "absolute",
+    bottom: 12,
+    left: 0,
+    right: 0,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginHorizontal: 4,
+  },
+  dotActive: {
+    backgroundColor: "#007AFF", // أزرق زي اللي في الصورة
+    width: 10, // النقطة النشطة بتبقى أكبر سيكا
+    height: 10,
+  },
+  dotInactive: {
+    backgroundColor: "#D1D1D6", // رمادي فاتح
   },
 
   // Thumbnails
-  thumbScroll: { paddingBottom: 8, marginTop: 24, gap: 16 },
+  thumbScroll: { paddingBottom: 8, marginTop: 16, gap: 12 },
   thumbItem: {
     width: 80,
     height: 80,
@@ -139,45 +173,55 @@ export const styles = StyleSheet.create({
     borderColor: colors.slate200,
     backgroundColor: colors.white,
     padding: 4,
-    marginLeft: 16,
+    marginLeft: 12,
   },
-  thumbItemActive: { borderColor: colors.primary, borderWidth: 2 },
-  thumbImg: { width: "100%", height: "100%", borderRadius: 12 },
+  thumbItemMobile: {
+    width: 65,
+    height: 65,
+    borderRadius: 12,
+  },
+  // 👈 ستايل الإطار الأخضر زي اللي في الصورة بالظبط
+  thumbItemActive: {
+    borderColor: colors.primary, // اللون الأخضر بتاعك (#11b67f)
+    borderWidth: 2,
+  },
+  thumbImg: { width: "100%", height: "100%", borderRadius: 10 },
 
   // Trust Markers
   trustMarkers: {
     flexDirection: "row-reverse",
     flexWrap: "wrap",
-    gap: 16,
-    marginTop: 32,
-    paddingTop: 24,
+    gap: 12,
+    marginTop: 24,
+    paddingTop: 20,
     borderTopWidth: 1,
     borderTopColor: colors.slate200,
+    justifyContent: "center",
   },
   trustItem: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 12,
-    width: "100%",
-    minWidth: 200,
+    gap: 8,
+    minWidth: "45%",
     flex: 1,
   },
   trustIconBg: {
     backgroundColor: "rgba(17, 182, 127, 0.1)",
-    padding: 10,
+    padding: 8,
     borderRadius: 50,
   },
   trustText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
     color: colors.slate800,
     textAlign: "right",
+    flexShrink: 1,
   },
 
   // Details Card
   detailsCard: {
     backgroundColor: "transparent",
-    padding: 8,
+    padding: 4,
   },
   brandName: {
     color: colors.primary,
@@ -194,40 +238,46 @@ export const styles = StyleSheet.create({
     lineHeight: 36,
     textAlign: "right",
   },
+  productTitleMobile: {
+    fontSize: 22,
+    lineHeight: 30,
+  },
   sku: {
     color: colors.slate500,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    marginTop: 8,
+    marginTop: 6,
     textAlign: "right",
   },
 
   priceRow: {
     flexDirection: "row-reverse",
     alignItems: "baseline",
-    gap: 16,
-    marginTop: 24,
+    gap: 12,
+    marginTop: 20,
   },
-  finalPrice: { fontSize: 38, fontWeight: "900", color: colors.primary },
+  finalPrice: { fontSize: 36, fontWeight: "900", color: colors.primary },
+  finalPriceMobile: { fontSize: 28 },
   oldPrice: {
-    fontSize: 20,
+    fontSize: 18,
     color: colors.slate400,
     textDecorationLine: "line-through",
     fontWeight: "600",
   },
+  oldPriceMobile: { fontSize: 16 },
 
   // Actions & Buttons (Desktop & Shared)
   purchaseControls: { flexDirection: "row-reverse", gap: 16, marginTop: 32 },
 
   addCartBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 14, // 👈 توحيد حواف الزراير
+    borderRadius: 14,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8, // 👈 تقليل الفراغ الداخلي عشان الموبايل
+    gap: 6,
   },
-  addCartText: { color: colors.white, fontSize: 15, fontWeight: "900" }, // 👈 تصغير الفونت درجة
+  addCartText: { color: colors.white, fontSize: 14, fontWeight: "900" },
 
   removeFromCartBtn: {
     backgroundColor: colors.dangerBg,
@@ -240,39 +290,40 @@ export const styles = StyleSheet.create({
   mobileFooter: {
     position: "absolute",
     bottom: 0,
-    width: "100%", // 👈 بدل left و right
+    left: 0,
+    right: 0,
     backgroundColor: colors.white,
     borderTopWidth: 1,
     borderTopColor: colors.slate200,
     paddingHorizontal: 16,
-    paddingVertical: 12, // 👈 مساحة داخلية متناسقة
-    paddingBottom: Platform.OS === "ios" ? 24 : 12, // 👈 احترام الـ SafeArea
-    flexDirection: "row-reverse", // 👈 تخطيط عربي صح
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === "ios" ? 34 : 12,
+    flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between", // 👈 توزيع العناصر يمين وشمال
+    justifyContent: "space-between",
     zIndex: 100,
-    elevation: 15, // 👈 ضل أقوى شوية للفوتر
+    elevation: 20,
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: -5 },
   },
   mobileButtonsContainer: {
     flex: 1,
     flexDirection: "row-reverse",
     gap: 8,
-    marginLeft: 12, // 👈 مسافة بين الزراير والكمية
+    marginLeft: 12,
   },
   mobileBuyNowBtn: {
     flex: 2,
-    height: 48, // 👈 توحيد الارتفاع لكل الزراير والكمية
+    height: 46,
     elevation: 2,
     shadowColor: colors.primary,
     shadowOpacity: 0.2,
   },
   mobileCartIconBtn: {
     flex: 1,
-    height: 48,
+    height: 46,
     elevation: 0,
     shadowOpacity: 0,
     borderWidth: 1,
@@ -286,24 +337,24 @@ export const styles = StyleSheet.create({
     borderColor: colors.dangerBorder,
   },
   mobileQtyContainer: {
-    width: 105, // 👈 عرض ثابت ومناسب لأداة الكمية
+    width: 105,
   },
 
   // --- Quantity Selector ---
   qtyBox: {
     flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between", // 👈 توزيع جوه المربع
+    justifyContent: "space-between",
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.slate200,
     borderRadius: 14,
-    padding: 2, // 👈 بادينج خفيف
-    height: 48, // 👈 نفس ارتفاع الزراير بالظبط!
+    padding: 2,
+    height: 46,
   },
   qtyBtn: {
-    width: 36, // 👈 حجم مناسب للمس
-    height: 42,
+    width: 36,
+    height: 40,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.slate50,
@@ -312,7 +363,7 @@ export const styles = StyleSheet.create({
   qtyText: {
     fontSize: 16,
     fontWeight: "900",
-    flex: 1, // 👈 تاخد المساحة الفاضية
+    flex: 1,
     textAlign: "center",
     color: colors.slate900,
   },
@@ -332,40 +383,41 @@ export const styles = StyleSheet.create({
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 20,
+    padding: 16,
     backgroundColor: colors.white,
   },
-  accordionTitle: { fontSize: 16, fontWeight: "800", color: colors.slate800 },
-  accordionBody: { paddingHorizontal: 20, paddingBottom: 20 },
+  accordionTitle: { fontSize: 15, fontWeight: "800", color: colors.slate800 },
+  accordionBody: { paddingHorizontal: 16, paddingBottom: 16 },
   accordionContent: {
-    fontSize: 15,
+    fontSize: 14,
     color: colors.slate600,
-    lineHeight: 26,
+    lineHeight: 24,
     textAlign: "right",
   },
 
   // Alternatives Section
-  alternativesSection: { marginTop: 64, paddingBottom: 24 },
+  alternativesSection: { marginTop: 40, paddingBottom: 24 },
   altHeader: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 16,
+    paddingHorizontal: 8,
   },
-  altTitleRow: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
-  altTitle: { fontSize: 22, fontWeight: "900", color: colors.slate900 },
-  altLink: { color: colors.primary, fontSize: 15, fontWeight: "800" },
-  altScroll: { paddingRight: 16, gap: 16 },
+  altTitleRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
+  altTitle: { fontSize: 20, fontWeight: "900", color: colors.slate900 },
+  altLink: { color: colors.primary, fontSize: 14, fontWeight: "800" },
+  altScroll: { paddingRight: 8, gap: 12 },
 
   altCard: {
-    width: 280,
+    width: 240,
     backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 16,
-    marginLeft: 16,
+    borderRadius: 20,
+    padding: 12,
+    marginLeft: 12,
     shadowColor: "#000",
     shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 2,
   },
   altImgBox: {
@@ -374,7 +426,7 @@ export const styles = StyleSheet.create({
     aspectRatio: 1,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 12,
     padding: 8,
   },
   altImg: {
@@ -382,28 +434,28 @@ export const styles = StyleSheet.create({
     height: "100%",
   },
   altName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
     color: colors.slate800,
     textAlign: "right",
     marginBottom: 4,
   },
   altSub: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: colors.slate500,
     textAlign: "right",
-    marginBottom: 16,
+    marginBottom: 12,
   },
   altFooter: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  altPrice: { fontSize: 18, fontWeight: "900", color: colors.primary },
+  altPrice: { fontSize: 16, fontWeight: "900", color: colors.primary },
   altCartBtn: {
     backgroundColor: "rgba(17, 182, 127, 0.1)",
-    padding: 12,
-    borderRadius: 14,
+    padding: 10,
+    borderRadius: 12,
   },
 });
