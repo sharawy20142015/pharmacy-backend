@@ -1,30 +1,36 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+// src/screens/Store/StoreScreen.jsx
+
+import React, { useRef, useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
   SafeAreaView,
   TouchableOpacity,
-  useWindowDimensions,
   Modal,
   FlatList,
   Pressable,
   ScrollView,
-  ActivityIndicator, // تم إضافته للتحميل المحلي
+  ActivityIndicator,
+  Dimensions,
+  RefreshControl,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { styles } from "./StoreScreen.styles";
+
+import { COLORS } from "../../theme/colors";
 import Header from "../../components/UI/Header/Header";
 import Footer from "../../components/UI/Footer/Footer";
 import FilterSidebar from "./FilterSidebar";
 import SearchBar from "../Home/components/SearchBar/SearchBar";
-import apiClient from "../../services/apiClient";
-import { useCart } from "../../context/CartContext";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
+import { useCart } from "../../context/CartContext";
+import { useStoreData } from "../hook/useStoreData";
 
 // --- Product Card Component ---
-const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
+const ProductCard = React.memo(({ item, cardWidth, navigation, isMobile }) => {
   const { cartItems, addToCart, removeFromCart } = useCart();
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
 
@@ -39,7 +45,6 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
 
   const imageUri =
     item.images?.[0] || item.img_url1 || "https://via.placeholder.com/200";
-
   const hasDiscount =
     item.price && item.final_price && item.price > item.final_price;
   const discountPercentage = hasDiscount
@@ -64,14 +69,12 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
         <View style={styles.stockBadge}>
           <Text style={styles.stockBadgeText}>IN STOCK</Text>
         </View>
-
         {hasDiscount && (
           <View style={styles.discountBadge}>
             <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
           </View>
         )}
       </View>
-
       <View style={styles.infoContainer}>
         <View style={styles.textStack}>
           <Text style={styles.brandName} numberOfLines={1}>
@@ -81,7 +84,6 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
             {item.en_name}
           </Text>
         </View>
-
         <View style={styles.priceContainer}>
           <View style={styles.priceColumn}>
             {hasDiscount && (
@@ -100,7 +102,6 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
               </Text>
             </View>
           </View>
-
           <TouchableOpacity
             style={[
               styles.floatingAddBtn,
@@ -118,131 +119,76 @@ const ProductCard = ({ item, cardWidth, navigation, isMobile }) => {
       </View>
     </Pressable>
   );
-};
+});
 
+// --- Store Screen Component ---
 const StoreScreen = () => {
-  const { width } = useWindowDimensions();
   const navigation = useNavigation();
-  const route = useRoute();
   const flatListRef = useRef(null);
+  const [width, setWidth] = useState(Dimensions.get("window").width);
+  const [height, setHeight] = useState(Dimensions.get("window").height);
 
-  // 1. استبدال الـ Global Loading بـ Local Loading لتحسين الأداء
-  const [isFirstLoad, setIsFirstLoad] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener("change", ({ window }) => {
+      if (window.width !== width) {
+        setWidth(window.width);
+      }
+      if (window.height !== height) {
+        setHeight(window.height);
+      }
+    });
+    return () => subscription?.remove();
+  }, [width, height]);
 
-  const [products, setProducts] = useState([]);
-  const [totalProducts, setTotalProducts] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 20;
+  const {
+    isFirstLoad,
+    isFetching,
+    refreshing,
+    products,
+    totalProducts,
+    currentPage,
+    totalPages,
+    searchQuery,
+    setSearchQuery,
+    setCurrentPage,
+    availableCategoryNames,
+    availableBrands,
+    activeCategoryName,
+    selectedBrands,
+    isFilterModalOpen,
+    setIsFilterModalOpen,
+    handleCategoryChange,
+    handleToggleBrand,
+    handleClearFilters,
+    handleApplyFilters,
+    handlePageChange,
+    onRefresh,
+  } = useStoreData(flatListRef);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [allCategoriesData, setAllCategoriesData] = useState([]);
-  const [availableCategoryNames, setAvailableCategoryNames] = useState([]);
-  const [availableBrands, setAvailableBrands] = useState([]);
-
-  const [activeCategorySlug, setActiveCategorySlug] = useState(null);
-  const [activeCategoryName, setActiveCategoryName] = useState(null);
-  const [selectedBrands, setSelectedBrands] = useState([]);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const handleSearchSubmit = useCallback(
+    (text) => {
+      setSearchQuery(text);
+      setCurrentPage(1);
+    },
+    [setSearchQuery, setCurrentPage],
+  );
 
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
-
   const numColumns = isDesktop ? 3 : 2;
   const sidebarWidth = isDesktop ? 288 : 0;
+
+  const mainPadding = 24;
+  const contentGap = isDesktop ? 40 : 0;
+  const columnGap = isDesktop ? 24 : 12;
+
   const availableWidth =
-    Math.min(width, 1440) - (isDesktop ? 48 : 24) - sidebarWidth;
+    Math.min(width, 1440) - mainPadding - sidebarWidth - contentGap;
   const cardWidth =
-    Math.floor(
-      (availableWidth - (isDesktop ? 24 : 12) * (numColumns - 1)) / numColumns,
-    ) - 2;
-
-  // 2. إصلاح مشكلة الـ Focus Effect والدوران اللانهائي
-  useEffect(() => {
-    let shouldResetPage = false;
-
-    if (
-      route.params?.search !== undefined &&
-      route.params?.search !== searchQuery
-    ) {
-      setSearchQuery(route.params.search);
-      shouldResetPage = true;
-    }
-
-    if (
-      route.params?.categorySlug &&
-      route.params?.categorySlug !== activeCategorySlug
-    ) {
-      setActiveCategorySlug(route.params.categorySlug);
-      setActiveCategoryName(route.params.categoryName);
-      shouldResetPage = true;
-    }
-
-    if (shouldResetPage) {
-      setCurrentPage(1);
-    }
-  }, [route.params]);
-
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const [catResponse, brandResponse] = await Promise.all([
-          apiClient.get("/categories/"),
-          apiClient.get("/products/brands"),
-        ]);
-        setAllCategoriesData(catResponse.data);
-        setAvailableCategoryNames(catResponse.data.map((c) => c.name));
-        setAvailableBrands(brandResponse.data);
-      } catch (error) {
-        console.error("Initial Data Error:", error);
-      }
-    };
-    fetchInitialData();
-  }, []);
-
-  const fetchProducts = useCallback(async () => {
-    try {
-      setIsFetching(true);
-      const offset = (currentPage - 1) * ITEMS_PER_PAGE;
-      let queryStr = `?limit=${ITEMS_PER_PAGE}&offset=${offset}`;
-      if (searchQuery) queryStr += `&search=${encodeURIComponent(searchQuery)}`;
-      if (activeCategorySlug)
-        queryStr += `&category_slug=${encodeURIComponent(activeCategorySlug)}`;
-      if (selectedBrands.length > 0)
-        selectedBrands.forEach(
-          (b) => (queryStr += `&brands=${encodeURIComponent(b)}`),
-        );
-
-      const response = await apiClient.get(`/products/${queryStr}`);
-      const data = response.data.products || response.data;
-      setProducts(data);
-      setTotalProducts(response.data.total || data.length);
-    } catch (error) {
-      console.error("Fetch Products Error:", error);
-    } finally {
-      setIsFirstLoad(false);
-      setIsFetching(false);
-    }
-  }, [activeCategorySlug, selectedBrands, currentPage, searchQuery]);
-
-  useEffect(() => {
-    fetchProducts();
-  }, [fetchProducts]);
-
-  const handleCategoryChange = (catName) => {
-    setCurrentPage(1);
-    if (!catName) {
-      setActiveCategoryName(null);
-      setActiveCategorySlug(null);
-    } else {
-      setActiveCategoryName(catName);
-      const matchedCat = allCategoriesData.find((c) => c.name === catName);
-      setActiveCategorySlug(matchedCat ? matchedCat.slug : null);
-    }
-  };
+    Math.floor((availableWidth - columnGap * (numColumns - 1)) / numColumns) -
+    2;
 
   const renderPagination = () => {
-    const totalPages = Math.ceil(totalProducts / ITEMS_PER_PAGE);
     if (totalPages <= 1) return null;
     let pages = [];
     for (let i = 1; i <= totalPages; i++) {
@@ -253,10 +199,7 @@ const StoreScreen = () => {
             styles.pageButton,
             currentPage === i && styles.activePageButton,
           ]}
-          onPress={() => {
-            setCurrentPage(i);
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-          }}
+          onPress={() => handlePageChange(i)}
         >
           <Text
             style={[
@@ -272,94 +215,40 @@ const StoreScreen = () => {
     return <View style={styles.paginationRow}>{pages}</View>;
   };
 
-  const ListHeader = () => (
-    <View style={{ paddingTop: 5 }}>
-      {!isDesktop && (
-        <View style={{ marginBottom: 20, zIndex: 10 }}>
-          <SearchBar
-            onSearch={(t) => {
-              setSearchQuery(t);
-              setCurrentPage(1);
-            }}
-            initialValue={searchQuery}
-          />
-        </View>
-      )}
-      <View style={styles.toolsRow}>
-        <View style={styles.breadcrumb}>
-          <Text style={styles.crumbText}>Home</Text>
-          <MaterialIcons name="chevron-right" size={18} color="#94a3b8" />
-          <Text style={styles.crumbActive}>
-            {activeCategoryName || "All Products"}
-          </Text>
-        </View>
-        <View style={styles.toolsActions}>
-          {isDesktop && (
-            <SearchBar
-              onSearch={(t) => {
-                setSearchQuery(t);
-                setCurrentPage(1);
-              }}
-              initialValue={searchQuery}
-            />
-          )}
-          {!isDesktop && (
-            <TouchableOpacity
-              style={styles.mobileFilterBtn}
-              onPress={() => setIsFilterModalOpen(true)}
-            >
-              <MaterialIcons name="tune" size={20} color="#0f172a" />
-              <Text style={styles.filterBtnText}>Filter</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-
   if (isFirstLoad) return <LoadingScreen />;
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* هيدر التطبيق الرئيسي فقط هو اللي ثابت فوق بالمسطرة */}
       <Header />
+
       <View style={{ flex: 1 }}>
-        <View style={[styles.mainWrapper, { flex: 1 }]}>
-          <View style={[styles.contentLayout, { flex: 1 }]}>
+        <View style={[styles.mainWrapper, { flex: 1, paddingVertical: 10 }]}>
+          <View style={[styles.contentLayout, { flex: 1, zIndex: 1 }]}>
+            {/* الفلتر الجانبي السكرول للدسكتوب */}
             {isDesktop && (
-              <View style={{ width: sidebarWidth }}>
-                <FilterSidebar
-                  categories={availableCategoryNames}
-                  activeCategory={activeCategoryName}
-                  onCategoryChange={handleCategoryChange}
-                  brands={availableBrands}
-                  selectedBrands={selectedBrands}
-                  onToggleBrand={(b) => {
-                    setCurrentPage(1);
-                    setSelectedBrands((prev) =>
-                      prev.includes(b)
-                        ? prev.filter((x) => x !== b)
-                        : [...prev, b],
-                    );
-                  }}
-                  totalProductsCount={totalProducts}
-                  onClearFilters={() => {
-                    setActiveCategoryName(null);
-                    setActiveCategorySlug(null);
-                    setSelectedBrands([]);
-                    setSearchQuery("");
-                    setCurrentPage(1);
-                  }}
-                  onApplyFilters={() =>
-                    flatListRef.current?.scrollToOffset({
-                      offset: 0,
-                      animated: true,
-                    })
-                  }
-                />
+              <View style={{ width: sidebarWidth, maxHeight: height - 160 }}>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 20 }}
+                >
+                  <FilterSidebar
+                    categories={availableCategoryNames}
+                    activeCategory={activeCategoryName}
+                    onCategoryChange={handleCategoryChange}
+                    brands={availableBrands}
+                    selectedBrands={selectedBrands}
+                    onToggleBrand={handleToggleBrand}
+                    totalProductsCount={totalProducts}
+                    onClearFilters={handleClearFilters}
+                    onApplyFilters={handleApplyFilters}
+                  />
+                </ScrollView>
               </View>
             )}
 
-            <View style={{ flex: 1 }}>
+            {/* قائمة المنتجات الحاوية الذكية */}
+            <View style={{ flex: 1, minWidth: 0 }}>
               {isFetching && !isFirstLoad && (
                 <View style={{ padding: 10, alignItems: "center" }}>
                   <ActivityIndicator size="small" color="#10b77f" />
@@ -372,16 +261,78 @@ const StoreScreen = () => {
                 numColumns={numColumns}
                 key={numColumns}
                 columnWrapperStyle={{
-                  gap: isDesktop ? 24 : 12,
+                  gap: columnGap,
                   justifyContent: "flex-start",
                 }}
                 contentContainerStyle={{ paddingBottom: 40 }}
-                // 3. تحسينات أداء الـ FlatList
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={5}
-                removeClippedSubviews={true}
-                ListHeaderComponent={ListHeader}
+                removeClippedSubviews={false}
+                style={
+                  Platform.OS === "web"
+                    ? { overscrollBehaviorY: "contain" }
+                    : null
+                }
+                // 🟢 تجميعة الـ HeaderRow النظيفة والوحيدة جوه الـ ListHeaderComponent عشان تسكرول بسلاسة
+                ListHeaderComponent={
+                  <View
+                    style={{ paddingBottom: 12, backgroundColor: "#f6f8f7" }}
+                  >
+                    {/* السيرش بار للموبايل بيظهر هنا بس ومرة واحدة! */}
+                    {!isDesktop && (
+                      <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
+                        <SearchBar
+                          onSearch={handleSearchSubmit}
+                          initialValue={searchQuery}
+                        />
+                      </View>
+                    )}
+
+                    {/* صف الأدوات والـ Breadcrumbs والـ Filter للموبايل */}
+                    <View style={styles.toolsRow}>
+                      <View style={styles.breadcrumb}>
+                        <Text style={styles.crumbText}>Home</Text>
+                        <MaterialIcons
+                          name="chevron-right"
+                          size={18}
+                          color="#94a3b8"
+                        />
+                        <Text style={styles.crumbActive}>
+                          {activeCategoryName || "All Products"}
+                        </Text>
+                      </View>
+                      <View style={styles.toolsActions}>
+                        {isDesktop && (
+                          <SearchBar
+                            onSearch={handleSearchSubmit}
+                            initialValue={searchQuery}
+                          />
+                        )}
+                        {!isDesktop && (
+                          <TouchableOpacity
+                            style={styles.mobileFilterBtn}
+                            onPress={() => setIsFilterModalOpen(true)}
+                          >
+                            <MaterialIcons
+                              name="tune"
+                              size={20}
+                              color="#0f172a"
+                            />
+                            <Text style={styles.filterBtnText}>Filter</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                }
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={onRefresh}
+                    colors={[COLORS.primary]}
+                  />
+                }
                 ListFooterComponent={
                   <View>
                     {products.length === 0 && !isFetching && (
@@ -437,19 +388,10 @@ const StoreScreen = () => {
               onCategoryChange={handleCategoryChange}
               brands={availableBrands}
               selectedBrands={selectedBrands}
-              onToggleBrand={(b) => {
-                setCurrentPage(1);
-                setSelectedBrands((prev) =>
-                  prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b],
-                );
-              }}
+              onToggleBrand={handleToggleBrand}
               totalProductsCount={totalProducts}
-              onClearFilters={() => {
-                setActiveCategoryName(null);
-                setSelectedBrands([]);
-                setIsFilterModalOpen(false);
-              }}
-              onApplyFilters={() => setIsFilterModalOpen(false)}
+              onClearFilters={handleClearFilters}
+              onApplyFilters={handleApplyFilters}
             />
           </ScrollView>
         </SafeAreaView>

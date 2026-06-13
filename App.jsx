@@ -1,17 +1,19 @@
-import React, { useEffect, useRef } from "react"; // 🟢 ضفنا useEffect و useRef
+// App.jsx
+
+import React, { useEffect, useRef } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import * as Linking from "expo-linking";
 
-// 1. استيراد الـ Providers (بما فيهم الـ LoadingProvider الجديد)
+// 1. استيراد الـ Providers
 import { AuthProvider } from "./src/context/AuthContext";
 import { CartProvider } from "./src/context/CartContext";
-import { LoadingProvider } from "./src/context/LoadingContext"; // 👈 المايسترو الجديد
+import { LoadingProvider } from "./src/context/LoadingContext";
 
 // استيراد AppNavigator
 import AppNavigator from "./src/navigation/TabNavigator";
 
-// 🟢 استيراد دوال GTM اللي عملناها
+// استيراد دوال GTM
 import { initGTM, logGTMEvent } from "./src/utils/analytics";
 
 const linking = {
@@ -20,7 +22,7 @@ const linking = {
     "http://localhost:8081",
     "http://10.100.16.30:8081",
     "http://54.234.4.149:8081",
-    "https://pharmacy-app-domain.com", // ضيف الدومين بتاعك هنا
+    "https://pharmacy-app-domain.com",
   ],
   config: {
     screens: {
@@ -47,6 +49,13 @@ const linking = {
       },
       Login: "login",
       ProductDetails: "product/:productId",
+
+      // مسار تفاصيل باقة معينة بالـ ID
+      PackageDetails: "package/:bundleId",
+
+      // 🟢 التعديل السحري هنا: ضفنا مسار شاشة كل الباقات عشان الـ Deep Linking والويب يشتغلوا طلقة
+      AllBundles: "all-bundles",
+
       Checkout: {
         path: "checkout",
         parse: {
@@ -65,32 +74,27 @@ const linking = {
 };
 
 export default function App() {
-  // 🟢 إنشاء References عشان نتتبع مسار الشاشات
   const navigationRef = useRef();
   const routeNameRef = useRef();
 
-  // 🟢 حقن سكريبت جوجل أول ما التطبيق يفتح
   useEffect(() => {
     initGTM();
   }, []);
 
   return (
     <GoogleOAuthProvider clientId="862508946163-tc53fo7jqb5ckq5tq48po8lqpimp8dnv.apps.googleusercontent.com">
-      {/* 2. الـ LoadingProvider لازم يلف كل الـ Providers عشان يتحكم في الشاشة كلها */}
       <LoadingProvider>
         <AuthProvider>
           <CartProvider>
             <NavigationContainer
-              ref={navigationRef} // 🟢 ربط الـ Ref بالـ Navigation
+              ref={navigationRef}
               linking={linking}
-              fallback={null} // يمنع الوميض الأبيض أثناء التحميل
-              // 🟢 تسجيل حدث (page_view) لأول شاشة تفتح
+              fallback={null}
               onReady={() => {
                 routeNameRef.current =
                   navigationRef.current.getCurrentRoute().name;
                 logGTMEvent("page_view", { page_path: routeNameRef.current });
               }}
-              // 🟢 تسجيل حدث (page_view) مع كل تغيير للشاشة
               onStateChange={async () => {
                 const previousRouteName = routeNameRef.current;
                 const currentRouteName =
@@ -100,7 +104,6 @@ export default function App() {
                   logGTMEvent("page_view", { page_path: currentRouteName });
                 }
 
-                // تحديث اسم الشاشة للمرة الجاية
                 routeNameRef.current = currentRouteName;
               }}
             >

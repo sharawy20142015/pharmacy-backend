@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+// src/screens/CheckoutScreen/CheckoutScreen.jsx
+
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,8 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
-  Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -22,17 +24,17 @@ import { styles, COLORS } from "./CheckoutScreen.styles";
 
 import ShippingForm from "./components/ShippingForm";
 import OrderSummary from "./components/OrderSummary";
-
-// 🟢 1. استيراد دالة التتبع
 import { logGTMEvent } from "../../utils/analytics";
 
 const CheckoutScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 1024;
-  const { cartItems, clearCart } = useCart();
 
+  // جلب بيانات السلة المركزية
+  const { cartItems, clearCart, updateQty } = useCart();
+
+  // --- 1. كافة الـ States في بداية المكون ---
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -43,9 +45,10 @@ const CheckoutScreen = () => {
   const [locations, setLocations] = useState([]);
   const [filteredCities, setFilteredCities] = useState([]);
   const [deliveryFee, setDeliveryFee] = useState(0);
-
-  // الحالة المسؤولة عن وسيلة الدفع (Cash أو Wallet)
   const [paymentMethod, setPaymentMethod] = useState("Cash");
+
+  const [customAlertVisible, setCustomAlertVisible] = useState(false);
+  const [customAlertMsg, setCustomAlertMessage] = useState("");
 
   const [addressData, setAddressData] = useState({
     firstName: "",
@@ -56,6 +59,23 @@ const CheckoutScreen = () => {
     phone: "",
   });
 
+  // --- 2. تعريف القيم المحسوبة فوراً ---
+  const isDesktop = width >= 1024;
+  const itemsToRender = expressItem ? [expressItem] : cartItems;
+
+  const subtotal = itemsToRender.reduce(
+    (sum, item) =>
+      sum +
+      (Number(item.final_price || item.price) || 0) *
+        (Number(item.qty || item.quantity) || 1),
+    0,
+  );
+  const pointsDiscountMoney = isUsingPoints
+    ? Number(loyaltyService.calculateMoney(userPoints))
+    : 0;
+  const total = Math.max(0, subtotal + deliveryFee - pointsDiscountMoney);
+
+  // --- 3. الـ Effects والـ Handlers التفاعلية ---
   useEffect(() => {
     const initializeCheckout = async () => {
       try {
@@ -70,8 +90,8 @@ const CheckoutScreen = () => {
             JSON.stringify(paramItem),
           );
         } else {
-          const storedItem = await AsyncStorage.getItem("@express_checkout");
-          if (storedItem) setExpressItem(JSON.parse(storedItem));
+          setExpressItem(null);
+          await AsyncStorage.removeItem("@express_checkout");
         }
 
         const localUser = await AsyncStorage.getItem("userData");
@@ -117,18 +137,22 @@ const CheckoutScreen = () => {
     }
   };
 
-  const itemsToRender = expressItem ? [expressItem] : cartItems;
-  const subtotal = itemsToRender.reduce(
-    (sum, item) =>
-      sum +
-      (Number(item.final_price || item.price) || 0) *
-        (Number(item.qty || item.quantity) || 1),
-    0,
+  const handleUpdateQty = useCallback(
+    async (id, newQty) => {
+      if (newQty < 1) return;
+      if (expressItem) {
+        const updatedExpress = { ...expressItem, qty: newQty };
+        setExpressItem(updatedExpress);
+        await AsyncStorage.setItem(
+          "@express_checkout",
+          JSON.stringify(updatedExpress),
+        );
+      } else {
+        updateQty(id, newQty);
+      }
+    },
+    [expressItem, updateQty],
   );
-  const pointsDiscountMoney = isUsingPoints
-    ? Number(loyaltyService.calculateMoney(userPoints))
-    : 0;
-  const total = Math.max(0, subtotal + deliveryFee - pointsDiscountMoney);
 
   const handlePlaceOrder = async () => {
     if (
@@ -137,7 +161,10 @@ const CheckoutScreen = () => {
       !addressData.city ||
       !addressData.governorate
     ) {
-      Alert.alert("بيانات ناقصة", "يرجى استكمال بيانات الشحن.");
+      setCustomAlertMessage(
+        "برجاء استكمال كافة بيانات الشحن المطلوبة (الاسم، رقم الموبايل، المحافظة والمدينة) لتأكيد أوردرك.",
+      );
+      setCustomAlertVisible(true);
       return;
     }
 
@@ -152,10 +179,26 @@ const CheckoutScreen = () => {
 
       const orderPayload = {
         customer_id: currentUser?.id || currentUser?.user?.id || null,
-        cart_items: itemsToRender.map((i) => ({
-          product_id: parseInt(i.id),
-          quantity: parseInt(i.qty || i.quantity) || 1,
-        })),
+
+        cart_items: itemsToRender.map((i) => {
+          if (i.isBundle) {
+            // لو العنصر عبارة عن باقة، بنبعت تفاصيل هيكلية كاملة تفك اللبس للباك إند
+            return {
+              product_id: i.id, // كود الباقة الأب (e.g. "bundle_pkg_maternity_01")
+              quantity: parseInt(i.qty || 1),
+              is_bundle: true, // علم (Flag) صريح عشان سيرفر FastAPI يلقطه
+              bundle_items: i.bundleProducts.map((p) => p.product_id), // 👈 لستة الـ IDs الحقيقية للمنتجين اللي اخترناهم بس!
+            };
+          }
+          // لو منتج عادي مسالم، بيتبعت بشكل طبيعي فلات
+          return {
+            product_id: parseInt(i.id),
+            quantity: parseInt(i.qty || i.quantity) || 1,
+            is_bundle: false,
+            bundle_items: [],
+          };
+        }),
+
         points_to_redeem: isUsingPoints ? Number(userPoints) : 0,
         shipping_first_name: addressData.firstName,
         shipping_last_name: addressData.lastName || "",
@@ -176,7 +219,6 @@ const CheckoutScreen = () => {
         res.status === 201 ||
         res.data?.status === "success"
       ) {
-        // 🟢 2. إرسال حدث الشراء لـ GTM بعد التأكد من نجاح الطلب
         try {
           const purchasedItems = itemsToRender.map((item) => ({
             item_id: item.id,
@@ -186,11 +228,11 @@ const CheckoutScreen = () => {
           }));
 
           logGTMEvent("purchase", {
-            transaction_id: res.data.order_number || "GUEST-" + Date.now(), // رقم الأوردر من الباك إند
-            value: total, // الإجمالي النهائي للطلب
+            transaction_id: res.data.order_number || "GUEST-" + Date.now(),
+            value: total,
             currency: "EGP",
-            payment_type: paymentMethod, // طريقة الدفع المحددة
-            items: purchasedItems, // المنتجات اللي اشتراها
+            payment_type: paymentMethod,
+            items: purchasedItems,
           });
         } catch (gtmError) {
           console.error("GTM Purchase Event Error:", gtmError);
@@ -208,10 +250,10 @@ const CheckoutScreen = () => {
       }
     } catch (e) {
       console.error("Order Error Detail:", e.response?.data);
-      Alert.alert(
-        "تنبيه",
-        "فشل في إتمام الطلب، يرجى مراجعة البيانات والمحاولة مرة أخرى.",
+      setCustomAlertMessage(
+        "عذراً، حدث خطأ أثناء إرسال الطلب. يرجى التحقق من اتصالك بالإنترنت والمحاولة مجدداً.",
       );
+      setCustomAlertVisible(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -232,16 +274,20 @@ const CheckoutScreen = () => {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.goBack()}
+          >
             <MaterialIcons
               name="arrow-forward"
               size={24}
               color={COLORS.primary}
             />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>إتمام الطلب</Text>
+          <Text style={styles.headerTitle}>Nabd Pharmacy</Text>
           <View style={{ width: 40 }} />
         </View>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -252,159 +298,158 @@ const CheckoutScreen = () => {
               { flexDirection: isDesktop ? "row-reverse" : "column" },
             ]}
           >
-            <View style={{ flex: 1 }}>
-              <ShippingForm
-                styles={styles}
-                COLORS={COLORS}
-                addressData={addressData}
-                setAddressData={setAddressData}
-                locations={locations}
-                filteredCities={filteredCities}
-                onGovernorateChange={onGovernorateChange}
-                onCityChange={onCityChange}
-                savedAddress={savedAddress}
-                handleUseSavedAddress={() => {}}
-              />
+            <View style={{ flex: isDesktop ? 8 : 1, width: "100%" }}>
+              <Text style={styles.pageTitle}>إتمام الطلب</Text>
 
-              {/* قسم اختيار وسيلة الدفع */}
-              <View
-                style={{
-                  marginTop: 20,
-                  padding: 20,
-                  backgroundColor: "#fff",
-                  borderRadius: 15,
-                  borderWidth: 1,
-                  borderColor: "#f1f5f9",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 18,
-                    fontWeight: "bold",
-                    marginBottom: 20,
-                    color: "#0f172a",
-                  }}
-                >
-                  وسيلة الدفع
-                </Text>
+              <View style={styles.sectionCard}>
+                <ShippingForm
+                  styles={styles}
+                  COLORS={COLORS}
+                  addressData={addressData}
+                  setAddressData={setAddressData}
+                  locations={locations}
+                  filteredCities={filteredCities}
+                  onGovernorateChange={onGovernorateChange}
+                  onCityChange={onCityChange}
+                  savedAddress={savedAddress}
+                  handleUseSavedAddress={() => {}}
+                  isDesktop={isDesktop}
+                />
+              </View>
 
-                {/* خيار الدفع كاش */}
-                <TouchableOpacity
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    marginBottom: 12,
-                    padding: 15,
-                    borderWidth: 1.5,
-                    borderRadius: 12,
-                    borderColor:
-                      paymentMethod === "Cash" ? COLORS.primary : "#f1f5f9",
-                    backgroundColor:
-                      paymentMethod === "Cash" ? "#f0fdf4" : "#fff",
-                  }}
-                  onPress={() => setPaymentMethod("Cash")}
-                >
+              <View style={styles.sectionCard}>
+                <View style={styles.sectionHeader}>
                   <MaterialIcons
-                    name={
-                      paymentMethod === "Cash"
-                        ? "radio-button-checked"
-                        : "radio-button-unchecked"
-                    }
+                    name="payments"
                     size={24}
                     color={COLORS.primary}
                   />
-                  <Text
-                    style={{
-                      marginLeft: 12,
-                      fontSize: 16,
-                      fontWeight: "600",
-                      color: "#1e293b",
-                    }}
-                  >
-                    دفع عند الاستلام (Cash)
-                  </Text>
+                  <Text style={styles.sectionTitle}>وسيلة الدفع</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.paymentOption,
+                    paymentMethod === "Cash" && styles.paymentOptionActive,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => setPaymentMethod("Cash")}
+                >
+                  <View style={styles.paymentLeftInfo}>
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        paymentMethod === "Cash" && styles.radioOuterActive,
+                      ]}
+                    >
+                      {paymentMethod === "Cash" && (
+                        <View style={styles.radioInner} />
+                      )}
+                    </View>
+                    <Text style={styles.paymentText}>
+                      الدفع عند الاستلام (Cash)
+                    </Text>
+                  </View>
+                  <MaterialIcons
+                    name="local-atm"
+                    size={24}
+                    color={COLORS.textSecondary}
+                  />
                 </TouchableOpacity>
 
-                {/* خيار المحفظة الإلكترونية */}
                 <TouchableOpacity
-                  style={{
-                    padding: 15,
-                    borderWidth: 1.5,
-                    borderRadius: 12,
-                    borderColor:
-                      paymentMethod === "Wallet" ? COLORS.primary : "#f1f5f9",
-                    backgroundColor:
-                      paymentMethod === "Wallet" ? "#f0fdf4" : "#fff",
-                  }}
+                  style={[
+                    styles.paymentOption,
+                    paymentMethod === "Wallet" && styles.paymentOptionActive,
+                  ]}
+                  activeOpacity={0.8}
                   onPress={() => setPaymentMethod("Wallet")}
                 >
-                  <View style={{ flexDirection: "row", alignItems: "center" }}>
-                    <MaterialIcons
-                      name={
-                        paymentMethod === "Wallet"
-                          ? "radio-button-checked"
-                          : "radio-button-unchecked"
-                      }
-                      size={24}
-                      color={COLORS.primary}
-                    />
-                    <Text
-                      style={{
-                        marginLeft: 12,
-                        fontSize: 16,
-                        fontWeight: "bold",
-                        color: "#1e293b",
-                      }}
+                  <View style={styles.paymentLeftInfo}>
+                    <View
+                      style={[
+                        styles.radioOuter,
+                        paymentMethod === "Wallet" && styles.radioOuterActive,
+                      ]}
                     >
+                      {paymentMethod === "Wallet" && (
+                        <View style={styles.radioInner} />
+                      )}
+                    </View>
+                    <Text style={styles.paymentText}>
                       محفظة إلكترونية (فودافون كاش / انستا باي)
                     </Text>
                   </View>
-                  {paymentMethod === "Wallet" && (
-                    <View
-                      style={{
-                        marginTop: 10,
-                        padding: 12,
-                        backgroundColor: "rgba(16, 183, 127, 0.1)",
-                        borderRadius: 10,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          color: COLORS.primary,
-                          lineHeight: 20,
-                          fontWeight: "500",
-                        }}
-                      >
-                        * بعد تأكيد الأوردر، سيظهر لك رقم الهاتف للتحويل وإرسال
-                        صورة الإيصال عبر واتساب.
-                      </Text>
-                    </View>
-                  )}
+                  <MaterialIcons
+                    name="credit-card"
+                    size={24}
+                    color={COLORS.textSecondary}
+                  />
                 </TouchableOpacity>
               </View>
             </View>
 
-            <OrderSummary
-              styles={styles}
-              COLORS={COLORS}
-              isDesktop={isDesktop}
-              itemsToRender={itemsToRender}
-              handleUpdateQty={() => {}}
-              currentUser={currentUser}
-              userPoints={userPoints}
-              isUsingPoints={isUsingPoints}
-              setIsUsingPoints={setIsUsingPoints}
-              subtotal={subtotal}
-              deliveryFee={deliveryFee}
-              pointsDiscountMoney={pointsDiscountMoney}
-              total={total}
-              isSubmitting={isSubmitting}
-              handlePlaceOrder={handlePlaceOrder}
-            />
+            <View style={{ flex: isDesktop ? 4 : 1, width: "100%" }}>
+              <OrderSummary
+                styles={styles}
+                COLORS={COLORS}
+                isDesktop={isDesktop}
+                itemsToRender={itemsToRender}
+                handleUpdateQty={handleUpdateQty}
+                currentUser={currentUser}
+                userPoints={userPoints}
+                isUsingPoints={isUsingPoints}
+                setIsUsingPoints={setIsUsingPoints}
+                subtotal={subtotal}
+                deliveryFee={deliveryFee}
+                pointsDiscountMoney={pointsDiscountMoney}
+                total={total}
+                isSubmitting={isSubmitting}
+                handlePlaceOrder={handlePlaceOrder}
+              />
+
+              <View style={styles.helpBox}>
+                <MaterialIcons
+                  name="info"
+                  size={22}
+                  color={COLORS.tertiaryText}
+                />
+                <View style={{ marginRight: 10, flex: 1 }}>
+                  <Text style={styles.helpTitle}>هل تحتاج لمساعدة؟</Text>
+                  <Text style={styles.helpSub}>
+                    فريقنا متاح دائماً للرد على استفساراتك الطبية عبر الواتساب
+                    أو الاتصال المباشر للصيدلية.
+                  </Text>
+                </View>
+              </View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={customAlertVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setCustomAlertVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.iconContainer}>
+              <MaterialIcons name="warning-amber" size={40} color="#d97706" />
+            </View>
+            <Text style={styles.modalTitle}>بيانات ناقصة ⚠️</Text>
+            <Text style={styles.modalMessage}>{customAlertMsg}</Text>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => setCustomAlertVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionBtnText}>تعديل البيانات</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

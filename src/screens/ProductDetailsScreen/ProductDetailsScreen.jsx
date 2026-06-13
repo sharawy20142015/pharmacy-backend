@@ -1,3 +1,5 @@
+// src/screens/ProductDetailsScreen/ProductDetailsScreen.jsx
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -7,6 +9,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Share,
+  Platform, // 🟢 ضفنا الـ Platform هنا عشان نفرق بين الويب والموبايل
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -18,7 +21,7 @@ import { useCart } from "../../context/CartContext";
 import Footer from "../../components/UI/Footer/Footer";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
-// استيراد المكونات اللي قسمناها
+// استيراد المكونات المقسمة
 import ProductGallery from "./components/ProductGallery";
 import ProductInfo from "./components/ProductInfo";
 import MobileFooter from "./components/MobileFooter";
@@ -48,6 +51,7 @@ const ProductDetailsScreen = () => {
     isInCart
       ? removeFromCart(product.id)
       : addToCart({ ...product, qty: quantity });
+
   const handleBuyNow = () => {
     if (product)
       navigation.navigate("Checkout", {
@@ -55,14 +59,27 @@ const ProductDetailsScreen = () => {
       });
   };
 
+  // 🟢 تعديل دالة الـ Share السحرية لتوليد اللينك وفتح القائمة المعروفة
   const handleShare = async () => {
     if (!product) return;
     try {
+      // 1. توليد اللينك: لو ويب بياخد لينك المتصفح الحالي، لو موبايل بيبني اللينك بالدومين
+      const productUrl =
+        Platform.OS === "web"
+          ? window.location.href
+          : `https://nabdpharmacy.com/product/${productId}`; // تقدر تبدل الدومين ده بدومين موقعك لما ترفع الباك إند
+
+      // 2. صياغة الرسالة اللي هتظهر مع اللينك
+      const shareMessage = `شاهد هذا المنتج على صيدلية نبض: ${product.en_name || product.ar_name}\n\nالرابط: ${productUrl}`;
+
+      // 3. استدعاء القائمة الأصلية للنظام (Native Share Sheet)
       await Share.share({
-        message: `شوف المنتج ده: ${product.en_name}\nالسعر: ${product.final_price?.toFixed(2)} EGP`,
+        message: shareMessage, // مهم جداً للأندرويد ومتصفحات الويب عشان الرابط يظهر جوه نص الرسالة
+        url: productUrl, // مخصص للـ iOS عشان يظهر اللينك في خانة منفصلة أنيقة
+        title: product.en_name || "Nabd Pharmacy",
       });
     } catch (error) {
-      console.error("Error sharing:", error);
+      console.error("Error sharing product:", error);
     }
   };
 
@@ -120,11 +137,9 @@ const ProductDetailsScreen = () => {
             {product.en_name}
           </Text>
           <View style={styles.headerActions}>
+            {/* زرار المشاركة هيفضل لوحده هنا بشكل رايق */}
             <TouchableOpacity style={styles.iconBtn} onPress={handleShare}>
               <MaterialIcons name="share" size={24} color="#0f172a" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.iconBtn}>
-              <MaterialIcons name="favorite-border" size={24} color="#0f172a" />
             </TouchableOpacity>
           </View>
         </View>
@@ -159,7 +174,7 @@ const ProductDetailsScreen = () => {
             />
           </View>
 
-          {/* قسم المنتجات المشابهة (ممكن تفصله هو كمان في كومبوننت لوحده لو حبيت!) */}
+          {/* قسم المنتجات المشابهة */}
           {relatedProducts.length > 0 && (
             <View style={styles.alternativesSection}>
               <View style={styles.altHeader}>

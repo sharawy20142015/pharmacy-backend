@@ -26,13 +26,13 @@ from app.routers.Product import product
 from app.routers.Classifications import classifications
 from app.modules.shipping import router as shipping_router 
 from app.modules.identity import router as customer_point
+from app.routers.Bundle.bundle import router as bundle_router
 # 👈 إضافة راوتر طلبات الأدوية النواقص
 from app.modules.requestproduct import router as requestproduct_router 
 from app.modules.adding_products.router import router as adding_products_router
 # 2. استيراد وظائف الـ Seeding التلقائي
 from app.modules.shipping.seed import auto_seed_shipping
 from app.modules.category.seed_categories import auto_seed_categories
-
 # 3. استيراد الإعدادات والأدمن
 from app.admin_portal import setup_admin
 
@@ -118,6 +118,7 @@ app.include_router(customer_point.router)
 # 👈 تسجيل راوتر طلبات الأدوية النواقص هنا
 app.include_router(requestproduct_router.router) 
 app.include_router(adding_products_router)
+app.include_router(bundle_router)
 # --- إعداد نظام حماية لوحة التحكم (Admin Auth) ---
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:

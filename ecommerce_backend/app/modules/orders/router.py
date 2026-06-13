@@ -22,13 +22,18 @@ router = APIRouter(prefix="/orders", tags=["Orders Management"])
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_new_order(payload: OrderCreate, db: AsyncSession = Depends(get_db)):
     try:
-        # تحويل عناصر السلة القادمة من الموبايل إلى قائمة قواميس للمعالجة
+        # 🟢 تعديل قياسي: استخراج حقول الباقة الجديدة وتجهيز الديكشنري للسيرفيس بالمسطرة
         cart_items_dict = [
-            {"product_id": item.product_id, "quantity": item.quantity} 
+            {
+                "product_id": item.product_id, 
+                "quantity": item.quantity,
+                "is_bundle": item.is_bundle,
+                "bundle_items": item.bundle_items
+            } 
             for item in payload.cart_items
         ]
         
-        # 🟢 تجميع بيانات الشحن والدفع لإرسالها للسيرفيس
+        # تجميع بيانات الشحن والدفع لإرسالها للسيرفيس
         shipping_data = {
             "shipping_first_name": payload.shipping_first_name,
             "shipping_last_name": payload.shipping_last_name or "",
@@ -36,13 +41,13 @@ async def create_new_order(payload: OrderCreate, db: AsyncSession = Depends(get_
             "shipping_city": payload.shipping_city,
             "shipping_details": payload.shipping_details,
             "shipping_phone": payload.shipping_phone,
-            "payment_method": payload.payment_method  # 👈 إضافة وسيلة الدفع هنا
+            "payment_method": payload.payment_method  
         }
 
         # حساب خصم النقاط (تحويل النقاط لقيمة مالية)
         calculated_points_discount = float((payload.points_to_redeem or 0) * 0.01)
 
-        # 🟢 استدعاء السيرفيس وتمرير المعاملات المطلوبة
+        # استدعاء السيرفيس وتمرير المعاملات المطلوبة مع الحقول الجديدة المدمجة
         new_order = await OrderService.create_order(
             db=db,
             customer_id=payload.customer_id,
@@ -117,7 +122,7 @@ async def get_all_orders_for_admin(db: AsyncSession = Depends(get_db)):
                 "customer_phone": order.shipping_phone,
                 "shipping_address": full_address,
                 "date": order.date.isoformat() if order.date else None,
-                "payment_method": order.payment_method or "Cash", # 👈 عرض وسيلة الدفع للأدمن
+                "payment_method": order.payment_method or "Cash", 
                 "items_count": len(order.items),
                 "shipping_fees": float(order.shipping_fees or 0),
                 "coupon_discount": float(order.coupon_discount or 0),
