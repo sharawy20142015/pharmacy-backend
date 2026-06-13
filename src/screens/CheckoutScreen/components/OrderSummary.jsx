@@ -1,169 +1,182 @@
+// src/screens/CheckoutScreen/components/OrderSummary.jsx
+
 import React from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
-  Switch,
 } from "react-native";
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 
 const OrderSummary = ({
   styles,
   COLORS,
-  isDesktop,
   itemsToRender,
   handleUpdateQty,
-  currentUser,
-  userPoints,
-  isUsingPoints,
-  setIsUsingPoints,
   subtotal,
   deliveryFee,
-  pointsDiscountMoney,
   total,
   isSubmitting,
   handlePlaceOrder,
 }) => {
-  // دالة لجلب الصورة
-  const getImageUrl = (item) => {
-    try {
-      if (Array.isArray(item.images) && item.images.length > 0)
-        return item.images[0];
-      if (typeof item.images === "string" && item.images.startsWith("["))
-        return JSON.parse(item.images)[0];
-      return (
-        item.img_url1 ||
-        item.main_image ||
-        item.images ||
-        "https://via.placeholder.com/150"
-      );
-    } catch (e) {
-      return "https://via.placeholder.com/150";
-    }
-  };
-
   return (
-    <View style={[styles.rightSection, isDesktop && { width: 420 }]}>
-      <View style={styles.sectionHeader}>
-        <Ionicons name="receipt" size={22} color={COLORS.primary} />
+    <View style={styles.sectionCardOverflow}>
+      {/* هيدر الملخص */}
+      <View style={[styles.sectionHeader, { padding: 20, marginBottom: 0 }]}>
+        <MaterialIcons name="shopping-bag" size={24} color={COLORS.primary} />
         <Text style={styles.sectionTitle}>ملخص الطلب</Text>
       </View>
 
-      <View style={styles.card}>
-        {/* 🟢 عرض المنتجات */}
-        {itemsToRender.map((item, index) => {
-          const price = Number(item.final_price) || Number(item.price) || 0;
-          const qty = Number(item.qty) || 1;
+      {/* لستة المنتجات بسكرول داخلي مرن */}
+      <ScrollView
+        style={styles.orderListContainer}
+        showsVerticalScrollIndicator={true}
+      >
+        {itemsToRender.map((item) => {
+          const itemImage = Array.isArray(item.images)
+            ? item.images[0]
+            : item.image || item.images;
+          const displayImage = itemImage || "https://via.placeholder.com/150";
+
           return (
-            <View key={index} style={styles.summaryItem}>
+            <View key={item.id} style={styles.summaryItemRow}>
+              {/* صورة المنتج على اليمين */}
               <View style={styles.summaryItemImgBox}>
                 <Image
-                  source={{ uri: getImageUrl(item) }}
+                  source={{ uri: displayImage }}
                   style={styles.summaryItemImg}
-                  resizeMode="contain"
+                  contentFit="contain"
                 />
               </View>
+
+              {/* تفاصيل المنتج والعداد على اليسار */}
               <View style={styles.summaryItemInfo}>
                 <Text style={styles.summaryItemName} numberOfLines={2}>
-                  {item.ar_name || item.en_name || "منتج"}
+                  {item.en_name || item.ar_name || item.title}
                 </Text>
-                <Text style={styles.summaryItemPrice}>
-                  {(price * qty).toFixed(2)} ج.م
-                </Text>
-                <View style={styles.qtyBox}>
-                  <TouchableOpacity
-                    style={styles.qtyBtn}
-                    onPress={() => handleUpdateQty(item.id, qty + 1)}
-                  >
-                    <MaterialIcons name="add" size={18} color="#0f172a" />
-                  </TouchableOpacity>
-                  <Text style={styles.qtyText}>{qty}</Text>
-                  <TouchableOpacity
-                    style={styles.qtyBtn}
-                    onPress={() => handleUpdateQty(item.id, qty - 1)}
-                  >
-                    <MaterialIcons name="remove" size={18} color="#0f172a" />
-                  </TouchableOpacity>
+
+                <View style={styles.summaryItemPriceQtyRow}>
+                  {/* السعر الذكي */}
+                  <Text style={styles.summaryItemPrice}>
+                    {(
+                      Number(item.final_price || item.price || 0) *
+                      (item.qty || 1)
+                    ).toFixed(2)}{" "}
+                    ج.م
+                  </Text>
+
+                  {/* العداد الأفقي المطور */}
+                  <View style={[styles.qtyBox, { flexDirection: "row" }]}>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        handleUpdateQty(
+                          item.id,
+                          (item.qty || item.quantity || 1) - 1,
+                        )
+                      }
+                    >
+                      <Text style={styles.qtyBtnText}>-</Text>
+                    </TouchableOpacity>
+
+                    <Text style={styles.qtyText}>
+                      {item.qty || item.quantity || 1}
+                    </Text>
+
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        handleUpdateQty(
+                          item.id,
+                          (item.qty || item.quantity || 1) + 1,
+                        )
+                      }
+                    >
+                      <Text style={styles.qtyBtnText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             </View>
           );
         })}
+      </ScrollView>
 
-        {/* 🟢 نقاط الولاء */}
-        {currentUser && userPoints > 0 && (
-          <View style={styles.loyaltyBox}>
-            <View style={styles.loyaltyHeader}>
-              <View>
-                <Text style={styles.loyaltyTitle}>استبدال النقاط</Text>
-                <Text style={styles.loyaltySub}>لديك {userPoints} نقطة</Text>
-              </View>
-              <Switch
-                value={isUsingPoints}
-                onValueChange={setIsUsingPoints}
-                thumbColor={isUsingPoints ? COLORS.primary : "#f4f3f4"}
-                trackColor={{ false: "#cbd5e1", true: "#d1fae5" }}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* 🟢 الفاتورة النهائية */}
-        <View style={{ marginTop: 20 }}>
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>إجمالي المنتجات</Text>
-            <Text style={styles.breakdownVal}>{subtotal.toFixed(2)} ج.م</Text>
-          </View>
-          {isUsingPoints && (
-            <View style={styles.breakdownRow}>
-              <Text style={[styles.breakdownLabel, { color: "#dc2626" }]}>
-                خصم النقاط
-              </Text>
-              <Text style={[styles.breakdownVal, { color: "#dc2626" }]}>
-                - {pointsDiscountMoney.toFixed(2)} ج.م
-              </Text>
-            </View>
-          )}
-          <View style={styles.breakdownRow}>
-            <Text style={styles.breakdownLabel}>مصاريف الشحن</Text>
-            <Text style={[styles.breakdownVal, { color: COLORS.primary }]}>
-              {deliveryFee > 0
-                ? `+ ${deliveryFee.toFixed(2)} ج.م`
-                : "يحدد بعد اختيار المدينة"}
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>الإجمالي المطلوب</Text>
-            <Text style={styles.totalVal}>{total.toFixed(2)} ج.م</Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.mainBtn, isSubmitting && styles.disabledBtn]}
-            onPress={handlePlaceOrder}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <MaterialIcons
-                  name="shopping-cart-checkout"
-                  size={24}
-                  color="#fff"
-                />
-                <Text style={styles.mainBtnText}>تأكيد وطلب الآن</Text>
-              </>
-            )}
-          </TouchableOpacity>
+      {/* جدول الحساب المالي السفلي للفاتورة (مصلح وآمن تماماً) 🟢 */}
+      <View style={styles.financialBreakdownBox}>
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>إجمالي المنتجات</Text>
+          <Text style={styles.breakdownVal}>
+            {Number(subtotal || 0).toFixed(2)} ج.م
+          </Text>
         </View>
+
+        <View style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>مصاريف الشحن</Text>
+          <Text
+            style={[
+              styles.breakdownVal,
+              { color: COLORS.primary, fontWeight: "600" },
+            ]}
+          >
+            {deliveryFee > 0
+              ? `${Number(deliveryFee).toFixed(2)} ج.م`
+              : "يحدد بعد اختيار المدينة"}
+          </Text>
+        </View>
+
+        <View style={styles.totalDivider} />
+
+        <View style={styles.finalTotalRow}>
+          <Text style={styles.finalTotalLabel}>الإجمالي المطلوب</Text>
+          <Text style={styles.finalTotalVal}>
+            {Number(total || 0).toFixed(2)} ج.م
+          </Text>
+        </View>
+      </View>
+
+      {/* زر تأكيد الطلب الممتد المطور الـ CTA */}
+      <View style={styles.ctaContainer}>
+        <TouchableOpacity
+          style={[styles.mainBtn, isSubmitting && styles.disabledBtn]}
+          activeOpacity={0.9}
+          disabled={isSubmitting || itemsToRender.length === 0}
+          onPress={handlePlaceOrder}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <>
+              <MaterialIcons
+                name="shopping-cart-checkout"
+                size={22}
+                color="#fff"
+              />
+              <Text style={styles.mainBtnText}>
+                تأكيد الطلب - إجمالي {Number(total || 0).toFixed(2)} ج.م
+              </Text>
+            </>
+          )}
+        </TouchableOpacity>
+        <Text
+          style={{
+            textAlign: "center",
+            color: "rgba(60, 74, 66, 0.6)",
+            fontSize: 12,
+            marginTop: 12,
+          }}
+        >
+          بالضغط على تأكيد الطلب، فإنك توافق على الشروط والأحكام الخاصة بصيدلية
+          نبض.
+        </Text>
       </View>
     </View>
   );
 };
 
-export default OrderSummary;
+export default React.memo(OrderSummary);

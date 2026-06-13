@@ -1,27 +1,35 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
+  Dimensions, // استبدال useWindowDimensions بـ Dimensions المستقرة 🚀
   Platform,
 } from "react-native";
-// 👇 1. استيراد Image من expo-image
 import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
 import { styles } from "./Header.styles";
 import { COLORS } from "../../../theme/colors";
 import { useCart } from "../../../context/CartContext";
 import { useNavigation } from "@react-navigation/native";
-
 import { useAuth } from "../../../context/AuthContext";
 
 const Header = () => {
-  const { width } = useWindowDimensions();
+  // 🟢 مراقبة العرض فقط ومنع الهيدر من الريندر عند فتح الكيبورد
+  const [width, setWidth] = useState(Dimensions.get("window").width);
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener("change", ({ window }) => {
+      if (window.width !== width) {
+        setWidth(window.width);
+      }
+    });
+    return () => subscription?.remove();
+  }, [width]);
+
   const isDesktop = width >= 1024;
   const navigation = useNavigation();
   const { cartItems } = useCart();
-
   const { user } = useAuth();
 
   const handleProfilePress = () => {
@@ -88,13 +96,12 @@ const Header = () => {
           >
             {user ? (
               user.avatar_url ? (
-                // 👇 2. استخدام expo-image لعرض صورة المستخدم
                 <Image
-                  source={user.avatar_url} // تمرير الرابط مباشرة
+                  source={user.avatar_url}
                   style={{ width: "100%", height: "100%" }}
-                  contentFit="cover" // عشان الصورة تملا الدائرة بالكامل
-                  transition={200} // ظهور ناعم
-                  cachePolicy="memory-disk" // حفظ الصورة في الكاش
+                  contentFit="cover"
+                  transition={200}
+                  cachePolicy="memory-disk"
                 />
               ) : (
                 <Text

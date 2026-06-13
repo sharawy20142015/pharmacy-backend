@@ -1,3 +1,5 @@
+// src/components/UI/ProductCard/ProductCard.jsx
+
 import React, { useState, memo } from "react";
 import {
   View,
@@ -7,23 +9,17 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Image } from "expo-image";
-import { MaterialIcons, Feather } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import { styles } from "./ProductCard.styles";
 import { COLORS } from "../../../theme/colors";
 import { useCart } from "../../../context/CartContext";
 
 const THEME_GREEN = COLORS?.primary || "#10b77f";
 
-const ProductCard = ({
-  item,
-  onPress,
-  onToggleWishlist,
-  containerStyle,
-  isMobile,
-}) => {
+const ProductCard = ({ item, onPress, containerStyle, isMobile }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  // لوجيك السلة
+  // لوجيك السلة المستقر
   const { cartItems, addToCart, removeFromCart } = useCart();
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
 
@@ -45,7 +41,7 @@ const ProductCard = ({
   const brandName = item?.Brand_Name || item?.vendor || "GENERIC";
   const productName = item?.en_name || item?.name || "Unknown Product";
 
-  // 👇 لوجيك الخصم الموحد
+  // لوجيك حساب الخصومات
   const oldPrice = item?.price ? Number(item.price) : 0;
   const finalPrice = item?.final_price ? Number(item.final_price) : oldPrice;
   const hasDiscount = oldPrice > finalPrice;
@@ -72,40 +68,23 @@ const ProductCard = ({
             isHovered &&
               Platform.OS === "web" && { transform: [{ scale: 1.05 }] },
           ]}
-          contentFit="contain" // 👈 بيضمن إن الصورة تفرد لأقصى حجم بدون قص
+          contentFit="contain"
           transition={200}
           cachePolicy="memory-disk"
         />
 
-        {/* بادچ الوصول الحديث */}
+        {/* بادج المنتجات الجديدة */}
         {item?.is_new_arrival === 1 && !hasDiscount && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>NEW</Text>
           </View>
         )}
 
-        {/* 👇 بادچ الخصم الأحمر */}
+        {/* بادج نسبة الخصم باللون الأحمر */}
         {hasDiscount && (
           <View style={styles.discountBadge}>
             <Text style={styles.discountBadgeText}>-{discountPercentage}%</Text>
           </View>
-        )}
-
-        {/* زرار الأمنيات (يظهر إذا لم يكن هناك خصم) */}
-        {!hasDiscount && (
-          <Pressable
-            style={styles.wishlistBtn}
-            onPress={(e) => {
-              e.stopPropagation();
-              if (onToggleWishlist) onToggleWishlist(item);
-            }}
-          >
-            <Feather
-              name="heart"
-              size={14}
-              color={COLORS.slate600 || "#475569"}
-            />
-          </Pressable>
         )}
       </View>
 
@@ -118,7 +97,6 @@ const ProductCard = ({
         </Text>
 
         <View style={styles.priceRow}>
-          {/* 👇 عمود السعر القديم والجديد */}
           <View style={styles.priceColumn}>
             {hasDiscount && (
               <Text style={styles.oldPrice}>{oldPrice.toFixed(2)} EGP</Text>
@@ -142,7 +120,7 @@ const ProductCard = ({
           </View>
         </View>
 
-        {/* زرار الإضافة/الإزالة من السلة (عريض في الرئيسية) */}
+        {/* زرار التحكم في إضافة المنتج للسلة */}
         <TouchableOpacity
           style={[
             styles.addToCartBtn,

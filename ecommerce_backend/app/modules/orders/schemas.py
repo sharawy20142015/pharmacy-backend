@@ -1,19 +1,25 @@
+# app/modules/orders/schemas.py
+
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime
 from decimal import Decimal
 
 # --- 1. Schema لعناصر الطلب (OrderItem) ---
 class OrderItemBase(BaseModel):
-    # 🟢 غيرناه لـ int لأننا بنبعت الـ ID الرقمي (Primary Key) دلوقتي
-    product_id: int  
+    # 🟢 تعديل جوهري سحري: تحويله لـ Union[int, str] لكي يقبل المعرفات الرقمية للمنتجات والنصية للباقات
+    product_id: Union[int, str]  
     quantity: float
 
 class OrderItemCreate(OrderItemBase):
-    pass
+    # 🟢 إضافة الحقول الجديدة هنا عشان Pydantic يستقبلهم من الفرونت إند بسلام وبدون 422
+    is_bundle: Optional[bool] = False
+    bundle_items: Optional[List[str]] = []
 
-class OrderItemRead(OrderItemBase):
+class OrderItemRead(BaseModel):
     id: int
+    product_id: Union[int, str]
+    quantity: float
     unit_price: Decimal
     subtotal: Decimal
 
@@ -33,14 +39,13 @@ class OrderCreate(BaseModel):
     
     # بيانات الشحن الأساسية
     shipping_first_name: str
-    # 🟢 جعلناه Optional عشان لو اليوزر محطش اسم تاني الريكويست ميفشلش (سبب محتمل لـ 422)
     shipping_last_name: Optional[str] = "" 
     shipping_governorate: str
     shipping_city: str
     shipping_details: str
     shipping_phone: str
     
-    # 🟢 وسيلة الدفع (Cash أو Wallet)
+    # وسيلة الدفع (Cash أو Wallet)
     payment_method: Optional[str] = "Cash"
 
 

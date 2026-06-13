@@ -8,7 +8,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.modules.orders.models import Order, OrderStatus, OrderItem
-from app.models.product import Product
+# 🟢 تم التحديث: استيراد موديلات الباقات Bundle و BundleItem للتعامل مع التفكيك الديناميكي
+from app.models.product import Product, Bundle, BundleItem
 from app.models.user import Customer, PointsTransaction, PointTransactionType 
 
 class OrderService:
@@ -27,36 +28,100 @@ class OrderService:
         order_items_to_add = []
         
         for item in cart_items:
-            # البحث عن المنتج باستخدام الـ ID (لأنه أضمن وأسرع)
-            query = select(Product).where(Product.id == int(item['product_id']))
-            res = await db.execute(query)
-            product = res.scalars().first()
+            # 🟢 1. فحص هل العنصر القادم من السلة هو باقة مجمعة محمية؟
+            is_bundle = item.get("is_bundle", False)
             
-            if not product:
-                raise HTTPException(status_code=404, detail=f"المنتج رقم {item['product_id']} غير موجود")
-            
-            qty_requested = Decimal(str(item['quantity']))
-            
-            # 🟢 [التحقق من المخزون]
-            if product.stock_quantity < qty_requested:
-                raise HTTPException(
-                    status_code=400, 
-                    detail=f"الكمية المطلوبة غير متوفرة. المتاح من الصنف هو {product.stock_quantity} فقط"
+            if is_bundle:
+                # 🟢 منطق تفكيك الباقات الذكي لايف لحماية الأرباح والمخزن بالملي
+                bundle_id_str = str(item['product_id'])
+                bundle_slug = bundle_id_str.replace("bundle_", "") # قنص الـ slug الحقيقي للباقة
+                
+                # جلب بيانات الباقة ومكوناتها والعلاقات بسرعة من الذاكرة
+                bundle_query = (
+                    select(Bundle)
+                    .where(Bundle.slug == bundle_slug)
+                    .options(
+                        selectinload(Bundle.bundle_items)
+                        .selectinload(BundleItem.product)
+                        .selectinload(Product.item_details)
+                    )
                 )
+                bundle_res = await db.execute(bundle_query)
+                bundle_obj = bundle_res.scalar_one_or_none()
+                
+                if not bundle_obj:
+                    raise HTTPException(status_code=404, detail=f"الباقة الحصرية ذات الرمز {bundle_slug} غير موجودة")
+                
+                bundle_qty = Decimal(str(item['quantity']))
+                
+                # اللوب على المنتجات المحددة والمنتقاة فقط من قبل العميل (مثل 2 من أصل 6)
+                for selected_sku in item.get("bundle_items", []):
+                    # مطابقة الـ SKU المبعوث مع كائنات الـ ORM المكيشة داخل الباقة
+                    matching_bi = next((bi for bi in bundle_obj.bundle_items if bi.short_item_no == selected_sku), None)
+                    
+                    if not matching_bi or not matching_bi.product:
+                        raise HTTPException(
+                            status_code=404, 
+                            detail=f"المنتج ذو الكود {selected_sku} غير متوفر أو تم تعطيله داخل هذه الباقة"
+                        )
+                        
+                    product = matching_bi.product
+                    item_qty_per_bundle = Decimal(str(matching_bi.quantity or 1))
+                    total_qty_requested = bundle_qty * item_qty_per_bundle
+                    
+                    # [التحقق من المخزون للمكون الفرعي بداخل الباقة]
+                    if product.stock_quantity < total_qty_requested:
+                        p_name = product.item_details.ar_name if product.item_details else selected_sku
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"عفواً، الكمية المطلوبة من الصنف '{p_name}' داخل الباقة غير متوفرة. المتاح بالمخزن هو {product.stock_quantity} فقط"
+                        )
+                        
+                    # قراءة السعر التوفيري الخاص بالصنف جوه الباقة بالملي
+                    unit_price = Decimal(str(matching_bi.get_bundle_item_final_price()))
+                    subtotal = unit_price * total_qty_requested
+                    total_raw += subtotal
+                    
+                    order_items_to_add.append(OrderItem(
+                        product_id=product.id,
+                        quantity=total_qty_requested,
+                        unit_price=unit_price,
+                        subtotal=subtotal
+                    ))
+                    
+                    # [خصم الكمية من المخزن فوراً للمكون الفرعي للباقة]
+                    product.stock_quantity -= total_qty_requested
+            else:
+                # 🟢 2. الصنف العادي المسالم الافتراضي (القديم والمؤمن)
+                query = select(Product).where(Product.id == int(item['product_id']))
+                res = await db.execute(query)
+                product = res.scalars().first()
+                
+                if not product:
+                    raise HTTPException(status_code=404, detail=f"المنتج رقم {item['product_id']} غير موجود")
+                
+                qty_requested = Decimal(str(item['quantity']))
+                
+                # [التحقق من المخزون للمنتج العادي]
+                if product.stock_quantity < qty_requested:
+                    raise HTTPException(
+                        status_code=400, 
+                        detail=f"الكمية المطلوبة غير متوفرة. المتاح من الصنف هو {product.stock_quantity} فقط"
+                    )
 
-            unit_price = Decimal(str(product.final_price))
-            subtotal = unit_price * qty_requested
-            total_raw += subtotal
-            
-            order_items_to_add.append(OrderItem(
-                product_id=product.id,
-                quantity=qty_requested,
-                unit_price=unit_price,
-                subtotal=subtotal
-            ))
+                unit_price = Decimal(str(product.final_price))
+                subtotal = unit_price * qty_requested
+                total_raw += subtotal
+                
+                order_items_to_add.append(OrderItem(
+                    product_id=product.id,
+                    quantity=qty_requested,
+                    unit_price=unit_price,
+                    subtotal=subtotal
+                ))
 
-            # 🟢 [خصم الكمية من المخزن فوراً عند الطلب]
-            product.stock_quantity -= qty_requested
+                # [خصم الكمية من المخزن فوراً عند الطلب للمنتج العادي]
+                product.stock_quantity -= qty_requested
         
         s_fees = Decimal(str(shipping_fees))
         p_disc = Decimal(str(points_discount))
@@ -151,7 +216,7 @@ class OrderService:
                     )
                     db.add(pt_transaction)
 
-        # 🟢 [إرجاع المخزن والنقاط في حالة الإلغاء]
+        # [إرجاع المخزن والنقاط في حالة الإلغاء]
         elif new_status == OrderStatus.CANCELLED:
             # 1. إرجاع النقاط للعميل
             if order.customer_id and order.used_points > 0:

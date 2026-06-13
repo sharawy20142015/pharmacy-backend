@@ -1,16 +1,27 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
-  useWindowDimensions,
+  Dimensions, // استبدال useWindowDimensions بـ Dimensions المستقرة 🚀
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { styles } from "./Footer.styles";
 import { COLORS } from "../../../theme/colors";
 
 const Footer = () => {
-  const { width } = useWindowDimensions();
+  // 🟢 مراقبة العرض فقط ومنع الفوتر من الريندر عند فتح الكيبورد
+  const [width, setWidth] = useState(Dimensions.get("window").width);
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener("change", ({ window }) => {
+      if (window.width !== width) {
+        setWidth(window.width);
+      }
+    });
+    return () => subscription?.remove();
+  }, [width]);
+
   const isDesktop = width >= 1024;
 
   return (
@@ -64,7 +75,7 @@ const Footer = () => {
           ))}
         </View>
 
-        {/* العمود الرابع: التواصل والخط الساخن */}
+        {/* العمود الرابع: التواصل */}
         <View style={styles.column}>
           <Text style={styles.columnTitle}>Stay Connected</Text>
           <View style={styles.socialRow}>
@@ -83,15 +94,10 @@ const Footer = () => {
               />
             </TouchableOpacity>
           </View>
-          {/* 
-          <View style={styles.hotlineBox}>
-            <Text style={styles.hotlineLabel}>EMERGENCY HOTLINE</Text>
-            <Text style={styles.hotlineNum}></Text>
-          </View> */}
         </View>
       </View>
 
-      {/* الجزء السفلي: الحقوق والسياسات */}
+      {/* الجزء السفلي: الحقوق */}
       <View style={styles.bottomBar}>
         <Text style={styles.copyText}>
           © 2024 Nabd Pharmacy. All rights reserved.

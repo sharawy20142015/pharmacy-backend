@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from "react";
+// src/screens/Home/components/SearchBar/SearchBar.jsx
+
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   TextInput,
   Text,
   TouchableOpacity,
   ScrollView,
-  Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -40,15 +41,18 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
     return () => clearTimeout(delayDebounceFn);
   }, [text]);
 
-  // 2. اختيار منتج من القائمة
-  const handleSelectSuggestion = (item) => {
-    setSuggestions([]);
-    setText(item.name);
-    navigation.navigate("ProductDetails", { productId: item.id });
-  };
+  // 2. اختيار منتج من القائمة (مغلف بـ useCallback لحمايته)
+  const handleSelectSuggestion = useCallback(
+    (item) => {
+      setSuggestions([]);
+      setText(item.name);
+      navigation.navigate("ProductDetails", { productId: item.id });
+    },
+    [navigation],
+  );
 
-  // 3. البحث عند الضغط على Enter
-  const handleFullSearch = () => {
+  // 3. البحث عند الضغط على Enter (مغلف بـ useCallback لحمايته)
+  const handleFullSearch = useCallback(() => {
     setSuggestions([]);
     if (text.trim() === "") return;
 
@@ -60,13 +64,11 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
     } else if (onSearch) {
       onSearch(text);
     }
-  };
+  }, [text, route.name, navigation, onSearch]);
 
   return (
     <View style={styles.mainWrapper}>
-      {/* صندوق البحث بالشكل الجديد */}
       <View style={styles.searchContainer}>
-        {/* أيقونة البحث الجديدة */}
         <MaterialIcons
           name="search"
           size={24}
@@ -99,7 +101,7 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
         )}
       </View>
 
-      {/* قائمة الاقتراحات المنسدلة بتصميم أنضف */}
+      {/* قائمة الاقتراحات المنسدلة */}
       {suggestions.length > 0 && (
         <View style={styles.suggestionsBox}>
           <ScrollView
@@ -112,7 +114,6 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
                 key={item.id}
                 style={[
                   styles.suggestionItem,
-                  // عشان نشيل الخط من آخر عنصر
                   index === suggestions.length - 1 && { borderBottomWidth: 0 },
                 ]}
                 onPress={() => handleSelectSuggestion(item)}
@@ -138,4 +139,5 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
   );
 };
 
-export default SearchBar;
+// 🚀 التعديل الجوهري: تغليف السيرش بار بـ React.memo لمنع أي تأثير ريندر خارجي عليه أثناء فتح الكيبورد
+export default React.memo(SearchBar);

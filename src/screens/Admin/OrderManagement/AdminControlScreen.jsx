@@ -24,6 +24,7 @@ import StatusTabs from "./components/StatusTabs";
 import OrderCard from "./components/OrderCard";
 import OrderDetailModal from "./components/OrderDetailModal";
 import AddProductForm from "./components/AddProductForm"; // 👈 استيراد فورم إضافة المنتج الجديد
+import AdminProductsTable from "./components/AdminProductsTable";
 
 // --- إعدادات حالات الطلب ---
 const STATUS_CONFIG = {
@@ -295,7 +296,7 @@ const AdminControlScreen = () => {
 
           {activeTab === "products" && (
             <View style={styles.placeholderContainer}>
-              <Text>إدارة المنتجات</Text>
+              <AdminProductsTable />
             </View>
           )}
           {activeTab === "customers" && (

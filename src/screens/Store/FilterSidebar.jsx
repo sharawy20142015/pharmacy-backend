@@ -1,9 +1,12 @@
+// src/screens/Store/FilterSidebar.jsx
+
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { styles } from "./FilterSidebar.styles";
 
-const SideItem = ({ label, count, active, onPress }) => (
+// غلفنا الـ SideItem بـ React.memo عشان ميعملش Re-render إلا لو الفئة دي بالذات بقت Active أو الـ count اتغير
+const SideItem = React.memo(({ label, count, active, onPress }) => (
   <TouchableOpacity
     style={[styles.sideItemRow, active && styles.sideItemRowActive]}
     onPress={onPress}
@@ -16,7 +19,7 @@ const SideItem = ({ label, count, active, onPress }) => (
       </Text>
     </View>
 
-    {/* 🟢 الدايرة دي مش هتظهر غير لو في رقم حقيقي ومش شرطة */}
+    {/* الدايرة دي مش هتظهر غير لو في رقم حقيقي ومش شرطة */}
     {count && count !== "-" && (
       <View style={[styles.countBadge, active && styles.countBadgeActive]}>
         <Text style={[styles.sideCountLabel, active && styles.sideCountActive]}>
@@ -25,9 +28,10 @@ const SideItem = ({ label, count, active, onPress }) => (
       </View>
     )}
   </TouchableOpacity>
-);
+));
 
-const CheckboxItem = ({ label, checked, onPress }) => (
+// غلفنا الـ CheckboxItem بـ React.memo عشان البراند اللي نضغط عليه بس هو اللي يتحث، وباقي البراندات متتحركش
+const CheckboxItem = React.memo(({ label, checked, onPress }) => (
   <TouchableOpacity
     style={styles.checkboxRow}
     onPress={onPress}
@@ -42,8 +46,9 @@ const CheckboxItem = ({ label, checked, onPress }) => (
       {label}
     </Text>
   </TouchableOpacity>
-);
+));
 
+// --- المكون الرئيسي للسايد بار ---
 const FilterSidebar = ({
   categories = [],
   activeCategory,
@@ -52,8 +57,8 @@ const FilterSidebar = ({
   selectedBrands = [],
   onToggleBrand,
   totalProductsCount,
-  onClearFilters, // 🟢 بيمسح الفلاتر
-  onApplyFilters, // 🟢 بيطبق الفلتر ويقفل المودال
+  onClearFilters, // بيمسح الفلاتر متوصل بالـ Hook
+  onApplyFilters, // بيطبق الفلتر ويقفل المودال متوصل بالـ Hook
 }) => {
   return (
     <View style={styles.sidebarContainer}>
@@ -115,7 +120,7 @@ const FilterSidebar = ({
         </View>
       </View>
 
-      {/* 🟢 --- Filter Actions (Clear & Apply Buttons) --- 🟢 */}
+      {/* --- Filter Actions (Clear & Apply Buttons) --- */}
       <View style={styles.filterActions}>
         <TouchableOpacity style={styles.clearBtn} onPress={onClearFilters}>
           <Text style={styles.clearBtnText}>Clear All</Text>
@@ -129,4 +134,4 @@ const FilterSidebar = ({
   );
 };
 
-export default FilterSidebar;
+export default React.memo(FilterSidebar);
