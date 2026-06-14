@@ -5,12 +5,16 @@ from datetime import datetime
 from app.models.Tag import product_tags_association
 from app.db.base import Base 
 
-# 🟢 1. الجدول الوسيط المطور بالأسماء النصية وعواميد الخصم المخصصة
+# ==========================================
+# 1. الجدول الوسيط (BundleItem)
+# ==========================================
 class BundleItem(Base):
     __tablename__ = 'BundleItem'
     
+    # 🟢 الربط هنا هيشتغل زي الفل لأننا خلينا العواميد اللي بيشاور عليها Unique
     bundle_name = Column(String(150), ForeignKey('Bundle.name_en', ondelete='CASCADE'), primary_key=True)
     short_item_no = Column(String(40), ForeignKey('Product.short_item_no', ondelete='CASCADE'), primary_key=True)
+    
     quantity = Column(Integer, default=1, server_default=text("1"), nullable=False) 
     
     # نسبة الخصم الخاصة بالمنتج جوه الباقة (مثال: 10.00 لـ 10%)
@@ -19,7 +23,7 @@ class BundleItem(Base):
     # قيمة الخصم المباشرة بالجنيه للمنتج جوه الباقة (مثال: 25.00 لـ 25 جنيه)
     discount_value = Column(Numeric(18, 2), default=0.00, server_default=text("0.00"), nullable=False)
 
-    # العلاقات (تأتي بالسعر والصورة توماتيك من جدول المنتج بدون تكرار داتا)
+    # العلاقات 
     product = relationship(
         'Product', 
         back_populates='bundle_links',
@@ -44,14 +48,16 @@ class BundleItem(Base):
             
         return max(0, base_price - discount_amount)
 
-
+# ==========================================
+# 2. جدول المنتجات (Product)
+# ==========================================
 class Product(Base):
     __tablename__ = 'Product'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     slug = Column(String(150), unique=True, index=True, nullable=True) 
 
-    # كود الصنف فريد ومطابق تماماً لقيد الـ UNIQUE في سوبابيز
+    # 🟢 هنا التعديل السحري: unique=True (عشان يقبل يتربط بيه كـ Foreign Key)
     short_item_no = Column(String(40), ForeignKey('ShortItemNo.short_item_no'), nullable=False, index=True, unique=True)
     
     item_details = relationship(
@@ -107,7 +113,9 @@ class Product(Base):
     def __repr__(self):
         return f"<Product(sku={self.short_item_no}, price={self.final_price})>"
 
-
+# ==========================================
+# 3. جدول العروض/الباقات (Bundle)
+# ==========================================
 class Bundle(Base):
     __tablename__ = 'Bundle'
     
@@ -115,9 +123,10 @@ class Bundle(Base):
     slug = Column(String(150), unique=True, index=True, nullable=False) 
     
     name_ar = Column(String(150), nullable=False) 
+    # 🟢 unique=True هنا ضرورية عشان BundleItem يقدر يشاور عليها
     name_en = Column(String(150), nullable=False, unique=True, index=True) 
     
-    # 🟢 تعديل العواميد لتصبح Text لتطابق الـ SQL TEXT وتمنع أخطاء الـ Length تماماً
+    # تعديل العواميد لتصبح Text لتطابق الـ SQL TEXT وتمنع أخطاء الـ Length
     description = Column(Text)  
     image_url = Column(Text)  
     
