@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 # --- 🟢 استيراد مكتبات الكاش الجديدة ---
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
 
 # --- استيراد أدوات قاعدة البيانات ---
 from app.db.base import Base  # تأكد أن هذا الملف يستورد كل الموديلات
@@ -30,9 +32,11 @@ from app.routers.Bundle.bundle import router as bundle_router
 # 👈 إضافة راوتر طلبات الأدوية النواقص
 from app.modules.requestproduct import router as requestproduct_router 
 from app.modules.adding_products.router import router as adding_products_router
+
 # 2. استيراد وظائف الـ Seeding التلقائي
 from app.modules.shipping.seed import auto_seed_shipping
 from app.modules.category.seed_categories import auto_seed_categories
+
 # 3. استيراد الإعدادات والأدمن
 from app.admin_portal import setup_admin
 
@@ -42,9 +46,17 @@ async def lifespan(app: FastAPI):
     print("---------------------------------------")
     print("🚀 Sharawy Pharmacy System Starting...")
     
-    # 🟢 تهيئة نظام الكاش في بداية التشغيل
-    FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
-    print("✅ Cache System Initialized")
+    # 🟢 تهيئة نظام الكاش بذكاء (Redis في الإنتاج، و InMemory في اللوكال)
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        # الاتصال بـ Redis
+        redis = aioredis.from_url(redis_url, encoding="utf8", decode_responses=True)
+        FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+        print("✅ Cache System Initialized (Redis 🚀)")
+    else:
+        # Fallback للعمل المحلي
+        FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
+        print("✅ Cache System Initialized (In-Memory 💻)")
     
     # الخطوة الحاسمة: إنشاء الجداول في قاعدة البيانات إذا لم تكن موجودة
     try:
@@ -96,6 +108,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 # استخدام الـ Secret Key من الـ env للسيشن
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
@@ -119,6 +132,7 @@ app.include_router(customer_point.router)
 app.include_router(requestproduct_router.router) 
 app.include_router(adding_products_router)
 app.include_router(bundle_router)
+
 # --- إعداد نظام حماية لوحة التحكم (Admin Auth) ---
 class AdminAuth(AuthenticationBackend):
     async def login(self, request: Request) -> bool:

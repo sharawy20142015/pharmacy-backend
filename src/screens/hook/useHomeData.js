@@ -1,10 +1,9 @@
 // src/screens/hook/useHomeData.js
 
 import { useState, useEffect, useCallback } from "react";
-import apiClient from "../../services/apiClient"; // خطوتين بس لورا وتبقى جوه الـ src 🚀
+import apiClient from "../../services/apiClient";
 
 export const useHomeData = () => {
-  // حالات تخزين البيانات والتحميل (States)
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [banners, setBanners] = useState([]);
@@ -12,17 +11,16 @@ export const useHomeData = () => {
   const [newArrivals, setNewArrivals] = useState([]);
   const [bestSellers, setBestSellers] = useState([]);
 
-  // دالة جلب كل البيانات من الـ APIs (مغلفة بـ useCallback للأداء المثالي)
   const fetchAllHomeData = useCallback(async (isRefreshing = false) => {
     try {
       if (!isRefreshing) {
         setIsLoading(true);
       }
 
-      // تشغيل كل الـ APIs بالتوازي مع حماية كل API بـ .catch لوحده
+      // 👇 التعديل هنا: تم تصحيح الروابط لتطابق الـ Backend
       const [bannersRes, categoriesRes, newArrivalsRes, bestSellersRes] =
         await Promise.all([
-          apiClient.get("/banners/home").catch((err) => {
+          apiClient.get("/banners/").catch((err) => {
             console.log("Banners Error:", err.message);
             return { data: [] };
           }),
@@ -30,17 +28,20 @@ export const useHomeData = () => {
             console.log("Categories Error:", err.message);
             return { data: [] };
           }),
-          apiClient.get("/products/new-arrivals").catch((err) => {
-            console.log("New Arrivals Error:", err.message);
-            return { data: [] };
-          }),
-          apiClient.get("/products/best-sellers").catch((err) => {
-            console.log("Best Sellers Error:", err.message);
-            return { data: [] };
-          }),
+          apiClient
+            .get("/classifications/products?type=New Arrivals&limit=10")
+            .catch((err) => {
+              console.log("New Arrivals Error:", err.message);
+              return { data: [] };
+            }),
+          apiClient
+            .get("/classifications/products?type=Best Sellers&limit=10")
+            .catch((err) => {
+              console.log("Best Sellers Error:", err.message);
+              return { data: [] };
+            }),
         ]);
 
-      // حفظ البيانات في الـ State
       setBanners(bannersRes.data || []);
       setCategories(categoriesRes.data || []);
       setNewArrivals(newArrivalsRes.data || []);
@@ -53,18 +54,15 @@ export const useHomeData = () => {
     }
   }, []);
 
-  // تشغيل الدالة تلقائياً أول ما الشاشة تفتح
   useEffect(() => {
     fetchAllHomeData();
   }, [fetchAllHomeData]);
 
-  // دالة السحب للتحديث (Pull to Refresh)
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchAllHomeData(true);
   }, [fetchAllHomeData]);
 
-  // بنخرج الداتا والـ Functions اللي الـ HomeScreen محتاجاها
   return {
     isLoading,
     refreshing,
