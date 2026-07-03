@@ -1,5 +1,3 @@
-// src/screens/Home/components/SearchBar/SearchBar.jsx
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -20,7 +18,6 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
   const navigation = useNavigation();
   const route = useRoute();
 
-  // 1. جلب الاقتراحات مع Debounce
   useEffect(() => {
     const fetchSuggestions = async () => {
       if (text.trim().length < 2) {
@@ -41,7 +38,6 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
     return () => clearTimeout(delayDebounceFn);
   }, [text]);
 
-  // 2. اختيار منتج من القائمة (مغلف بـ useCallback لحمايته)
   const handleSelectSuggestion = useCallback(
     (item) => {
       setSuggestions([]);
@@ -51,7 +47,6 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
     [navigation],
   );
 
-  // 3. البحث عند الضغط على Enter (مغلف بـ useCallback لحمايته)
   const handleFullSearch = useCallback(() => {
     setSuggestions([]);
     if (text.trim() === "") return;
@@ -101,7 +96,6 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
         )}
       </View>
 
-      {/* قائمة الاقتراحات المنسدلة */}
       {suggestions.length > 0 && (
         <View style={styles.suggestionsBox}>
           <ScrollView
@@ -139,5 +133,4 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
   );
 };
 
-// 🚀 التعديل الجوهري: تغليف السيرش بار بـ React.memo لمنع أي تأثير ريندر خارجي عليه أثناء فتح الكيبورد
 export default React.memo(SearchBar);

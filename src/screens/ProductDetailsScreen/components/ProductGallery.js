@@ -52,20 +52,23 @@ const ProductGallery = ({ images }) => {
                       "all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                   },
                 ]}
-                resizeMode="contain"
+                contentFit="contain" // 🟢 هنا غيرنا resizeMode لـ contentFit عشان اللغوشة تروح
+                transition={200} // إضافة لمسة أنيقة لتحميل الصورة
               />
-              <View
-                style={[
-                  styles.productFloorShadow,
-                  isMobile && styles.productFloorShadowMobile,
-                  hovered &&
-                    !isMobile && {
+
+              {/* 🟢 خلينا الظل (المسطرة) يظهر في الديسكتوب بس واختفى من الموبايل */}
+              {!isMobile && (
+                <View
+                  style={[
+                    styles.productFloorShadow,
+                    hovered && {
                       transform: [{ scaleX: 0.6 }],
                       opacity: 0.05,
                     },
-                  Platform.OS === "web" && { transition: "all 0.5s ease" },
-                ]}
-              />
+                    Platform.OS === "web" && { transition: "all 0.5s ease" },
+                  ]}
+                />
+              )}
             </>
           )}
         </Pressable>
@@ -121,7 +124,7 @@ const ProductGallery = ({ images }) => {
               <Image
                 source={{ uri: img }}
                 style={styles.thumbImg}
-                resizeMode="contain"
+                contentFit="contain" // 🟢 هنا كمان
               />
             </TouchableOpacity>
           ))}

@@ -1,179 +1,280 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 
 export const styles = StyleSheet.create({
   sidebarContainer: {
     flex: 1,
-    paddingVertical: 8,
+    backgroundColor: "#ffffff",
+    width: "100%",
   },
-  sidebarSection: {
-    marginBottom: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
+  headerRow: {
+    flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
-    paddingHorizontal: 8,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "ios" ? 16 : 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eef5ee",
+    backgroundColor: "#ffffff",
   },
-  titleWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  closeButton: {
+    padding: 4,
   },
-  sideTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: 0.5,
+  headerTitle: {
+    fontFamily: "Manrope",
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#161d19",
   },
-  selectedCount: {
-    fontSize: 11,
-    color: "#10b77f",
-    fontWeight: "bold",
-    backgroundColor: "rgba(16, 183, 127, 0.12)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  listGroup: {
-    gap: 4,
-  },
-
-  // --- Categories Styles ---
-  sideItemRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: "transparent",
-  },
-  sideItemRowActive: {
-    backgroundColor: "rgba(16, 183, 127, 0.08)",
-  },
-  sideItemContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  activeIndicator: {
-    width: 4,
-    height: 16,
-    backgroundColor: "#10b77f",
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  sideLinkLabel: {
-    fontSize: 15,
-    color: "#475569",
+  clearAllText: {
+    fontFamily: "Manrope",
+    fontSize: 14,
+    color: "#6c7a71",
     fontWeight: "500",
   },
-  sideLinkActive: {
-    color: "#10b77f",
-    fontWeight: "800",
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
-  countBadge: {
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  sectionContainer: {
+    marginTop: 24,
+    width: "100%",
   },
-  countBadgeActive: {
-    backgroundColor: "#10b77f",
-  },
-  sideCountLabel: {
-    fontSize: 12,
-    color: "#64748b",
-    fontWeight: "700",
-  },
-  sideCountActive: {
-    color: "#ffffff",
-  },
-
-  // --- Divider ---
-  divider: {
-    height: 1,
-    backgroundColor: "#e2e8f0",
-    marginVertical: 20,
-    marginHorizontal: 12,
-  },
-
-  // --- Brands Styles ---
-  checkboxRow: {
-    flexDirection: "row",
+  sectionHeader: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    marginBottom: 14,
   },
-  checkboxBox: {
+  sectionIcon: {
+    marginLeft: 8,
+  },
+  sectionTitle: {
+    fontFamily: "Manrope",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#161d19",
+  },
+  capsuleContainer: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  capsule: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#bbcac0",
+    backgroundColor: "#ffffff",
+  },
+  capsuleActive: {
+    backgroundColor: "#11b67f",
+    borderColor: "#11b67f",
+  },
+  capsuleText: {
+    fontFamily: "Manrope",
+    fontSize: 14,
+    color: "#3c4a42",
+  },
+  capsuleTextActive: {
+    color: "#ffffff",
+    fontWeight: "600",
+  },
+  searchContainer: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    backgroundColor: "#eef5ee",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 46,
+    marginBottom: 12,
+    width: "100%",
+  },
+  searchIcon: {
+    marginLeft: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: "Manrope",
+    fontSize: 14,
+    color: "#161d19",
+    textAlign: "right",
+    paddingVertical: 0,
+    // إلغاء خط التحديد الأسود تماماً على الويب والمحاكي
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        outlineWidth: 0,
+      },
+    }),
+  },
+  brandWrapper: {
+    borderWidth: 1,
+    borderColor: "#eef5ee",
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    backgroundColor: "#fff",
+    overflow: "hidden",
+  },
+  brandList: {
+    maxHeight: 200,
+  },
+  brandRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f7fbf7",
+    width: "100%",
+  },
+  checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#cbd5e1",
+    borderColor: "#bbcac0",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
-    backgroundColor: "#ffffff",
-  },
-  checkboxBoxChecked: {
-    backgroundColor: "#10b77f",
-    borderColor: "#10b77f",
-  },
-  checkboxLabel: {
-    fontSize: 15,
-    color: "#475569",
-    fontWeight: "500",
-  },
-  checkboxLabelChecked: {
-    color: "#0f172a",
-    fontWeight: "700",
-  },
-
-  // 🟢 --- Filter Actions Styles (الزراير الجديدة) --- 🟢
-  filterActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#e2e8f0",
-    gap: 12,
-    paddingHorizontal: 8,
-    paddingBottom: 20, // مساحة من تحت عشان لو سكرول
-  },
-  clearBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1.5,
-    borderColor: "#cbd5e1",
-    alignItems: "center",
+    marginLeft: 12,
     backgroundColor: "#fff",
   },
-  clearBtnText: {
-    color: "#475569",
-    fontWeight: "bold",
-    fontSize: 15,
+  checkboxChecked: {
+    backgroundColor: "#11b67f",
+    borderColor: "#11b67f",
   },
-  applyBtn: {
+  brandLabel: {
+    fontFamily: "Manrope",
+    fontSize: 15,
+    color: "#3c4a42",
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: "#10b77f",
-    alignItems: "center",
-    elevation: 2, // ظل خفيف للأندرويد
-    shadowColor: "#10b77f", // ظل خفيف للـ iOS
+    textAlign: "right",
+  },
+  brandLabelChecked: {
+    color: "#161d19",
+    fontWeight: "600",
+  },
+  sliderMockContainer: {
+    height: 40,
+    justifyContent: "center",
+    marginVertical: 10,
+    width: "100%",
+  },
+  sliderLine: {
+    height: 4,
+    backgroundColor: "#e8f0e9",
+    borderRadius: 2,
+    position: "relative",
+  },
+  sliderActiveLine: {
+    position: "absolute",
+    left: 0,
+    height: 4,
+    backgroundColor: "#11b67f",
+    borderRadius: 2,
+  },
+  sliderThumb: {
+    position: "absolute",
+    top: -8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#11b67f",
+    borderWidth: 2,
+    borderColor: "#ffffff",
+    marginLeft: -10,
+    elevation: 5,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 3,
   },
-  applyBtnText: {
-    color: "#ffffff",
-    fontWeight: "bold",
+  priceInputRow: {
+    flexDirection: "row-reverse",
+    gap: 16,
+    marginTop: 10,
+    width: "100%",
+  },
+  priceInputBox: {
+    flex: 1,
+  },
+  priceLabel: {
+    fontFamily: "Manrope",
+    fontSize: 13,
+    color: "#6c7a71",
+    marginBottom: 6,
+    marginRight: 4,
+    textAlign: "right",
+  },
+  priceInput: {
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#bbcac0",
+    borderRadius: 14,
+    height: 44,
+    paddingHorizontal: 12,
+    fontFamily: "Manrope",
     fontSize: 15,
+    color: "#161d19",
+    textAlign: "center",
+    // حماية مدخلات الأسعار السفلية من الإطار الأسود أيضاً
+    ...Platform.select({
+      web: {
+        outlineStyle: "none",
+        outlineWidth: 0,
+      },
+    }),
+  },
+  switchSection: {
+    marginTop: 28,
+    borderTopWidth: 1,
+    borderTopColor: "#eef5ee",
+    paddingTop: 20,
+    gap: 18,
+    width: "100%",
+  },
+  switchRow: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  switchLeft: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+  },
+  switchLabel: {
+    fontFamily: "Manrope",
+    fontSize: 15,
+    color: "#161d19",
+    fontWeight: "500",
+  },
+  footerContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#dde4dd",
+  },
+  applyButton: {
+    backgroundColor: "#11b67f",
+    borderRadius: 18,
+    height: 54,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#11b67f",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+  },
+  applyButtonText: {
+    fontFamily: "Manrope",
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
   },
 });

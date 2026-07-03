@@ -1,21 +1,16 @@
-// src/navigation/TabNavigator.jsx
-
-import React from "react";
+import React, { useEffect } from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Platform, View, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 
-// استيراد الـ COLORS لتصليح كراش الـ ReferenceError فوراً
 import { COLORS } from "../theme/colors";
 
-// استيراد المكونات والـ Context
 import LoadingScreen from "../components/UI/LoadingScreen/LoadingScreen";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useLoading } from "../context/LoadingContext";
 
-// الشاشات
 import HomeScreen from "../screens/Home/HomeScreen";
 import StoreScreen from "../screens/Store/StoreScreen";
 import CartScreen from "../screens/CartScreen/CartScreen";
@@ -27,13 +22,11 @@ import RequestProductScreen from "../screens/Home/components/RequestProductScree
 import AdminControlScreen from "../screens/Admin/OrderManagement/AdminControlScreen";
 import ProductDetailsScreen from "../screens/ProductDetailsScreen/ProductDetailsScreen";
 import PackageDetailsScreen from "../screens/PackageDetails/PackageDetailsScreen";
-// 🟢 1. استيراد شاشة جميع الباقات الجديدة بالمسار الصحيح
 import AllBundlesScreen from "../screens/AllBundles/AllBundlesScreen";
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-// 🚀 كومبوننت معزول للـ Loading Overlay لمنع الـ Re-render للـ Navigator كله
 const GlobalLoadingOverlay = () => {
   const { isGlobalLoading } = useLoading();
 
@@ -46,7 +39,6 @@ const GlobalLoadingOverlay = () => {
   );
 };
 
-// --- الـ Stacks الفرعية ---
 const StoreStack = () => (
   <Stack.Navigator
     screenOptions={{
@@ -69,12 +61,10 @@ const HomeStack = () => (
     <Stack.Screen name="HomeMain" component={HomeScreen} />
     <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
     <Stack.Screen name="PackageDetails" component={PackageDetailsScreen} />
-    {/* 🟢 2. زرع الشاشة داخل الـ HomeStack عشان زرار "عرض الكل" يقدر ينادي عليها فوراً بسلاسة */}
     <Stack.Screen name="AllBundles" component={AllBundlesScreen} />
   </Stack.Navigator>
 );
 
-// --- الـ Tab Navigator الموحد ---
 const TabNavigator = () => {
   const { user } = useAuth();
   const { cartItems } = useCart();
@@ -144,9 +134,20 @@ const TabNavigator = () => {
   );
 };
 
-// --- App Navigator الرئيسي الكلي ---
 const AppNavigator = () => {
   const { user, isLoading: authLoading } = useAuth();
+
+  useEffect(() => {
+    if (Platform.OS === "web") {
+      document.body.style.overscrollBehaviorY = "none";
+    }
+
+    return () => {
+      if (Platform.OS === "web") {
+        document.body.style.overscrollBehaviorY = "auto";
+      }
+    };
+  }, []);
 
   if (authLoading) {
     return <LoadingScreen />;
@@ -173,7 +174,6 @@ const AppNavigator = () => {
             name="PackageDetails"
             component={PackageDetailsScreen}
           />
-          {/* 🟢 3. زرع الشاشة داخل الـ Global Group عشان الـ Deep Linking والـ Web Mapping يقروها طلقة من الـ Root */}
           <Stack.Screen name="AllBundles" component={AllBundlesScreen} />
           <Stack.Screen
             name="RequestProductScreen"
@@ -182,7 +182,6 @@ const AppNavigator = () => {
         </Stack.Group>
       </Stack.Navigator>
 
-      {/* الـ Overlay المعزول يشتغل لوحده فوق الشاشات */}
       <GlobalLoadingOverlay />
     </View>
   );

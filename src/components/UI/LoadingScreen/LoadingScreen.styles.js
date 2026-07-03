@@ -1,33 +1,35 @@
-import { StyleSheet, Dimensions, Platform } from "react-native";
+import { StyleSheet, Dimensions } from "react-native";
 import { COLORS } from "../../../theme/colors";
 
 const { width, height } = Dimensions.get("window");
 
 export const styles = StyleSheet.create({
   container: {
-    // نستخدم absoluteFillObject عشان يفرش على الشاشة كلها فوق أي عناصر تانية
     ...StyleSheet.absoluteFillObject,
     width: width,
     height: height,
     backgroundColor: COLORS.white || "#ffffff",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 99999, // أعلى طبقة ممكنة
+    zIndex: 99999,
+  },
+  centerContent: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 40,
   },
   logoSection: {
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 50,
   },
   logoIconWrap: {
     backgroundColor: COLORS.primary,
-    width: 90, // أبعاد ثابتة للدائرة عشان نضمن التناسق
+    width: 90,
     height: 90,
-    borderRadius: 30, // تدويرة عصرية
+    borderRadius: 30,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,
-    // شادو احترافي (Neumorphism style بسيط)
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.4,
@@ -37,7 +39,7 @@ export const styles = StyleSheet.create({
   logoText: {
     fontSize: 34,
     fontWeight: "900",
-    color: "#0f172a", // Slate 900
+    color: "#0f172a",
     letterSpacing: -1.5,
     textAlign: "center",
   },
@@ -46,15 +48,13 @@ export const styles = StyleSheet.create({
     fontWeight: "800",
   },
   spinnerContainer: {
-    position: "absolute",
-    bottom: height * 0.15, // وضع الـ Spinner تحت اللوجو بمسافة كويسة
     alignItems: "center",
     justifyContent: "center",
   },
   loadingText: {
-    marginTop: 10,
+    marginTop: 16,
     fontSize: 14,
-    color: "#64748b", // Slate 500
+    color: "#64748b",
     fontWeight: "600",
     letterSpacing: 1,
     textTransform: "uppercase",

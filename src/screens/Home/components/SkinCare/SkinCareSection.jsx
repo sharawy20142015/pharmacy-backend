@@ -1,46 +1,27 @@
-// E:\Sharawy\PharmacyApp\frontend\src\screens\Home\components\SkinCareSection\SkinCareSection.js
-
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   ActivityIndicator,
-  FlatList, // 👇 1. استيراد FlatList
+  FlatList,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./SkinCareSection.styles";
 import { COLORS } from "../../../../theme/colors";
-import { productService } from "../../../../services/productService";
 import ProductCard from "../../../../components/UI/ProductCard/ProductCard";
+import { useSkinCareProducts } from "./useSkinCareProducts";
 
 const SkinCareSection = () => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
-
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
 
-  useEffect(() => {
-    const fetchSkinCareProducts = async () => {
-      try {
-        // تأكد إن الـ slug "skin-care" هو اللي متسجل عندك في قاعدة البيانات
-        const data =
-          await productService.getProductsByCategorySlug("skin-care");
-        setProducts(data);
-      } catch (error) {
-        console.error("Failed to load Skin Care products:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSkinCareProducts();
-  }, []);
+  const { data: products = [], isLoading, isError } = useSkinCareProducts();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View style={styles.loaderContainer}>
         <ActivityIndicator size="large" color={COLORS.primary || "#10b77f"} />
@@ -48,12 +29,10 @@ const SkinCareSection = () => {
     );
   }
 
-  // لو مفيش منتجات في القسم ده، مش هنعرض السيكشن خالص عشان شكل الصفحة
-  if (products.length === 0) return null;
+  if (isError || products.length === 0) return null;
 
   return (
     <View style={styles.section}>
-      {/* هيدر قسم العناية بالبشرة */}
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <View style={styles.indicator} />
@@ -73,7 +52,6 @@ const SkinCareSection = () => {
         </TouchableOpacity>
       </View>
 
-      {/* 👇 2. استخدام FlatList بدلاً من ScrollView */}
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -86,10 +64,9 @@ const SkinCareSection = () => {
         renderItem={({ item }) => (
           <View
             style={{
-              // العرض متناسق مع اللي في الصورة
               width: isDesktop ? 240 : 180,
               marginRight: 15,
-              paddingBottom: 10, // مساحة للظل (Shadow)
+              paddingBottom: 10,
             }}
           >
             <ProductCard
@@ -99,7 +76,7 @@ const SkinCareSection = () => {
                 navigation.navigate("ProductDetails", { productId: item.id })
               }
               onToggleWishlist={(product) => {
-                console.log("Wishlist logic:", product.id);
+                console.log(product.id);
               }}
             />
           </View>
@@ -109,4 +86,4 @@ const SkinCareSection = () => {
   );
 };
 
-export default SkinCareSection;
+export default React.memo(SkinCareSection);

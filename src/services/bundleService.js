@@ -9,6 +9,7 @@ import apiClient from "./apiClient";
 export const getActiveBundles = async () => {
   try {
     const response = await apiClient.get("/bundles/");
+    console.log(response.data);
     return response.data;
   } catch (error) {
     console.error(
@@ -27,6 +28,7 @@ export const getActiveBundles = async () => {
 export const getBundleBySlug = async (slug) => {
   try {
     const response = await apiClient.get(`/bundles/${slug}`);
+
     return response.data;
   } catch (error) {
     console.error(
