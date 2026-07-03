@@ -1,43 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   useWindowDimensions,
   ActivityIndicator,
-  FlatList, // 👇 1. استيراد FlatList
+  FlatList,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./NewArrivals.styles";
 import { COLORS } from "../../../../theme/colors";
-import { productService } from "../../../../services/productService";
 import ProductCard from "../../../../components/UI/ProductCard/ProductCard";
+import { useNewArrivals } from "./useNewArrivals";
 
 const NewArrivals = () => {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
-
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
 
-  useEffect(() => {
-    const fetchNewArrivals = async () => {
-      try {
-        const data =
-          await productService.getProductsByClassification("New Arrivals");
-        setProducts(data);
-      } catch (error) {
-        console.error("Failed to load new arrivals:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchNewArrivals();
-  }, []);
+  const { data: products = [], isLoading, isError } = useNewArrivals();
 
-  if (loading) {
+  if (isLoading) {
     return (
       <View
         style={{
@@ -51,11 +35,10 @@ const NewArrivals = () => {
     );
   }
 
-  if (products.length === 0) return null;
+  if (isError || products.length === 0) return null;
 
   return (
     <View style={styles.section}>
-      {/* الهيدر الاحترافي */}
       <View style={styles.header}>
         <View style={styles.titleContainer}>
           <View style={styles.indicator} />
@@ -68,7 +51,6 @@ const NewArrivals = () => {
         </TouchableOpacity>
       </View>
 
-      {/* 👇 2. استخدام FlatList بدلاً من ScrollView */}
       <FlatList
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -93,7 +75,7 @@ const NewArrivals = () => {
                 navigation.navigate("ProductDetails", { productId: item.id })
               }
               onToggleWishlist={(product) => {
-                console.log("Wishlist logic here:", product.id);
+                console.log(product.id);
               }}
             />
           </View>

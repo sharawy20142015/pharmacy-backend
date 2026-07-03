@@ -15,6 +15,8 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 32,
     gap: 16,
+    zIndex: 1,
+    elevation: 1,
   },
   breadcrumb: { flexDirection: "row", alignItems: "center", gap: 8 },
   crumbText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
@@ -41,8 +43,6 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 40,
   },
-
-  // --- Product Card Style Fixed ---
   productCard: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -83,8 +83,6 @@ export const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0,
   },
-
-  // 👇 ستايلات بادچ الخصم
   discountBadge: {
     position: "absolute",
     top: 6,
@@ -100,7 +98,6 @@ export const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: "900",
   },
-
   infoContainer: {
     padding: 8,
     flex: 1,
@@ -123,12 +120,10 @@ export const styles = StyleSheet.create({
     lineHeight: 16,
     textAlign: "left",
   },
-
-  // 👇 ستايلات عمود السعر
   priceContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-end", // عشان السعر والزرار يبقوا على نفس الخط من تحت
+    alignItems: "flex-end",
     marginTop: 4,
   },
   priceColumn: {
@@ -138,13 +133,12 @@ export const styles = StyleSheet.create({
   oldPrice: {
     fontSize: 10,
     color: "#94a3b8",
-    textDecorationLine: "line-through", // خط الشطب
+    textDecorationLine: "line-through",
     marginBottom: 1,
   },
   mainPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 2 },
   finalPrice: { fontSize: 13, fontWeight: "900", color: "#10b77f" },
   currency: { fontSize: 9, fontWeight: "bold", color: "#10b77f" },
-
   floatingAddBtn: {
     width: 26,
     height: 26,
@@ -158,7 +152,6 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ef4444",
   },
-
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -168,8 +161,6 @@ export const styles = StyleSheet.create({
     borderBottomColor: "#e2e8f0",
   },
   modalTitle: { fontSize: 20, fontWeight: "bold", color: "#0f172a" },
-
-  // --- Pagination ---
   paginationSection: {
     marginTop: 32,
     alignItems: "center",

@@ -1,6 +1,10 @@
-// src/screens/Store/StoreScreen.jsx
-
-import React, { useRef, useCallback, useState, useEffect } from "react";
+import React, {
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -19,7 +23,6 @@ import { Image } from "expo-image";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./StoreScreen.styles";
-
 import { COLORS } from "../../theme/colors";
 import Header from "../../components/UI/Header/Header";
 import Footer from "../../components/UI/Footer/Footer";
@@ -29,7 +32,6 @@ import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 import { useCart } from "../../context/CartContext";
 import { useStoreData } from "../hook/useStoreData";
 
-// --- Product Card Component ---
 const ProductCard = React.memo(({ item, cardWidth, navigation, isMobile }) => {
   const { cartItems, addToCart, removeFromCart } = useCart();
   const isInCart = cartItems.some((cartItem) => cartItem.id === item.id);
@@ -121,7 +123,6 @@ const ProductCard = React.memo(({ item, cardWidth, navigation, isMobile }) => {
   );
 });
 
-// --- Store Screen Component ---
 const StoreScreen = () => {
   const navigation = useNavigation();
   const flatListRef = useRef(null);
@@ -130,12 +131,8 @@ const StoreScreen = () => {
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener("change", ({ window }) => {
-      if (window.width !== width) {
-        setWidth(window.width);
-      }
-      if (window.height !== height) {
-        setHeight(window.height);
-      }
+      if (window.width !== width) setWidth(window.width);
+      if (window.height !== height) setHeight(window.height);
     });
     return () => subscription?.remove();
   }, [width, height]);
@@ -151,9 +148,10 @@ const StoreScreen = () => {
     searchQuery,
     setSearchQuery,
     setCurrentPage,
-    availableCategoryNames,
+    categoriesData,
     availableBrands,
     activeCategoryName,
+    activeCategorySlug,
     selectedBrands,
     isFilterModalOpen,
     setIsFilterModalOpen,
@@ -163,6 +161,14 @@ const StoreScreen = () => {
     handleApplyFilters,
     handlePageChange,
     onRefresh,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    inStockOnly,
+    setInStockOnly,
+    onSaleOnly,
+    setOnSaleOnly,
   } = useStoreData(flatListRef);
 
   const handleSearchSubmit = useCallback(
@@ -177,7 +183,6 @@ const StoreScreen = () => {
   const isMobile = width < 768;
   const numColumns = isDesktop ? 3 : 2;
   const sidebarWidth = isDesktop ? 288 : 0;
-
   const mainPadding = 24;
   const contentGap = isDesktop ? 40 : 0;
   const columnGap = isDesktop ? 24 : 12;
@@ -188,10 +193,21 @@ const StoreScreen = () => {
     Math.floor((availableWidth - columnGap * (numColumns - 1)) / numColumns) -
     2;
 
-  const renderPagination = () => {
+  const paginationComponent = useMemo(() => {
     if (totalPages <= 1) return null;
+
     let pages = [];
-    for (let i = 1; i <= totalPages; i++) {
+    let startPage = Math.max(1, currentPage - 1);
+    let endPage = Math.min(totalPages, currentPage + 1);
+
+    if (currentPage === 1) {
+      endPage = Math.min(totalPages, 3);
+    }
+    if (currentPage === totalPages) {
+      startPage = Math.max(1, totalPages - 2);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
       pages.push(
         <TouchableOpacity
           key={i}
@@ -212,20 +228,54 @@ const StoreScreen = () => {
         </TouchableOpacity>,
       );
     }
-    return <View style={styles.paginationRow}>{pages}</View>;
-  };
+
+    return (
+      <View style={styles.paginationRow}>
+        <TouchableOpacity
+          style={[
+            styles.pageButton,
+            currentPage === 1 && styles.disabledPageButton,
+          ]}
+          onPress={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+        >
+          <MaterialIcons
+            name="chevron-left"
+            size={22}
+            color={currentPage === 1 ? "#cbd5e1" : "#64748b"}
+          />
+        </TouchableOpacity>
+
+        {pages}
+
+        <TouchableOpacity
+          style={[
+            styles.pageButton,
+            currentPage === totalPages && styles.disabledPageButton,
+          ]}
+          onPress={() =>
+            currentPage < totalPages && handlePageChange(currentPage + 1)
+          }
+          disabled={currentPage === totalPages}
+        >
+          <MaterialIcons
+            name="chevron-right"
+            size={22}
+            color={currentPage === totalPages ? "#cbd5e1" : "#64748b"}
+          />
+        </TouchableOpacity>
+      </View>
+    );
+  }, [totalPages, currentPage, handlePageChange]);
 
   if (isFirstLoad) return <LoadingScreen />;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* هيدر التطبيق الرئيسي فقط هو اللي ثابت فوق بالمسطرة */}
       <Header />
-
       <View style={{ flex: 1 }}>
         <View style={[styles.mainWrapper, { flex: 1, paddingVertical: 10 }]}>
           <View style={[styles.contentLayout, { flex: 1, zIndex: 1 }]}>
-            {/* الفلتر الجانبي السكرول للدسكتوب */}
             {isDesktop && (
               <View style={{ width: sidebarWidth, maxHeight: height - 160 }}>
                 <ScrollView
@@ -233,8 +283,8 @@ const StoreScreen = () => {
                   contentContainerStyle={{ paddingBottom: 20 }}
                 >
                   <FilterSidebar
-                    categories={availableCategoryNames}
-                    activeCategory={activeCategoryName}
+                    categories={categoriesData}
+                    activeCategory={activeCategorySlug}
                     onCategoryChange={handleCategoryChange}
                     brands={availableBrands}
                     selectedBrands={selectedBrands}
@@ -242,12 +292,19 @@ const StoreScreen = () => {
                     totalProductsCount={totalProducts}
                     onClearFilters={handleClearFilters}
                     onApplyFilters={handleApplyFilters}
+                    minPrice={minPrice}
+                    setMinPrice={setMinPrice}
+                    maxPrice={maxPrice}
+                    setMaxPrice={setMaxPrice}
+                    inStockOnly={inStockOnly}
+                    setInStockOnly={setInStockOnly}
+                    onSaleOnly={onSaleOnly}
+                    setOnSaleOnly={setOnSaleOnly}
+                    onClose={() => setIsFilterModalOpen(false)}
                   />
                 </ScrollView>
               </View>
             )}
-
-            {/* قائمة المنتجات الحاوية الذكية */}
             <View style={{ flex: 1, minWidth: 0 }}>
               {isFetching && !isFirstLoad && (
                 <View style={{ padding: 10, alignItems: "center" }}>
@@ -264,32 +321,39 @@ const StoreScreen = () => {
                   gap: columnGap,
                   justifyContent: "flex-start",
                 }}
-                contentContainerStyle={{ paddingBottom: 40 }}
+                contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
                 initialNumToRender={10}
                 maxToRenderPerBatch={10}
                 windowSize={5}
-                removeClippedSubviews={false}
-                style={
-                  Platform.OS === "web"
-                    ? { overscrollBehaviorY: "contain" }
-                    : null
-                }
-                // 🟢 تجميعة الـ HeaderRow النظيفة والوحيدة جوه الـ ListHeaderComponent عشان تسكرول بسلاسة
+                removeClippedSubviews={Platform.OS !== "web"}
+                style={[
+                  { flex: 1 },
+                  Platform.OS === "web" && { overscrollBehaviorY: "contain" },
+                ]}
                 ListHeaderComponent={
                   <View
-                    style={{ paddingBottom: 12, backgroundColor: "#f6f8f7" }}
+                    style={{
+                      paddingBottom: 12,
+                      backgroundColor: "#f6f8f7",
+                      zIndex: 50,
+                      elevation: 50,
+                    }}
                   >
-                    {/* السيرش بار للموبايل بيظهر هنا بس ومرة واحدة! */}
                     {!isDesktop && (
-                      <View style={{ marginBottom: 12, paddingHorizontal: 4 }}>
+                      <View
+                        style={{
+                          marginBottom: 12,
+                          paddingHorizontal: 4,
+                          zIndex: 100,
+                          elevation: 10,
+                        }}
+                      >
                         <SearchBar
                           onSearch={handleSearchSubmit}
                           initialValue={searchQuery}
                         />
                       </View>
                     )}
-
-                    {/* صف الأدوات والـ Breadcrumbs والـ Filter للموبايل */}
                     <View style={styles.toolsRow}>
                       <View style={styles.breadcrumb}>
                         <Text style={styles.crumbText}>Home</Text>
@@ -347,7 +411,7 @@ const StoreScreen = () => {
                         </Text>
                       </View>
                     )}
-                    {renderPagination()}
+                    {paginationComponent}
                     {products.length > 0 && (
                       <View style={styles.paginationSection}>
                         <Text style={styles.pageText}>
@@ -375,25 +439,26 @@ const StoreScreen = () => {
 
       <Modal visible={isFilterModalOpen} animationType="slide">
         <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Filters</Text>
-            <TouchableOpacity onPress={() => setIsFilterModalOpen(false)}>
-              <MaterialIcons name="close" size={28} color="#0f172a" />
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={{ padding: 20 }}>
-            <FilterSidebar
-              categories={availableCategoryNames}
-              activeCategory={activeCategoryName}
-              onCategoryChange={handleCategoryChange}
-              brands={availableBrands}
-              selectedBrands={selectedBrands}
-              onToggleBrand={handleToggleBrand}
-              totalProductsCount={totalProducts}
-              onClearFilters={handleClearFilters}
-              onApplyFilters={handleApplyFilters}
-            />
-          </ScrollView>
+          <FilterSidebar
+            categories={categoriesData}
+            activeCategory={activeCategorySlug}
+            onCategoryChange={handleCategoryChange}
+            brands={availableBrands}
+            selectedBrands={selectedBrands}
+            onToggleBrand={handleToggleBrand}
+            totalProductsCount={totalProducts}
+            onClearFilters={handleClearFilters}
+            onApplyFilters={handleApplyFilters}
+            minPrice={minPrice}
+            setMinPrice={setMinPrice}
+            maxPrice={maxPrice}
+            setMaxPrice={setMaxPrice}
+            inStockOnly={inStockOnly}
+            setInStockOnly={setInStockOnly}
+            onSaleOnly={onSaleOnly}
+            setOnSaleOnly={setOnSaleOnly}
+            onClose={() => setIsFilterModalOpen(false)}
+          />
         </SafeAreaView>
       </Modal>
     </SafeAreaView>

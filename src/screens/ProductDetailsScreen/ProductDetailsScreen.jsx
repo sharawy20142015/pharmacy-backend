@@ -1,5 +1,3 @@
-// src/screens/ProductDetailsScreen/ProductDetailsScreen.jsx
-
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -9,7 +7,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Share,
-  Platform, // 🟢 ضفنا الـ Platform هنا عشان نفرق بين الويب والموبايل
+  Platform,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -21,7 +19,6 @@ import { useCart } from "../../context/CartContext";
 import Footer from "../../components/UI/Footer/Footer";
 import LoadingScreen from "../../components/UI/LoadingScreen/LoadingScreen";
 
-// استيراد المكونات المقسمة
 import ProductGallery from "./components/ProductGallery";
 import ProductInfo from "./components/ProductInfo";
 import MobileFooter from "./components/MobileFooter";
@@ -35,7 +32,6 @@ const ProductDetailsScreen = () => {
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
 
-  // --- States ---
   const [isLoading, setIsLoading] = useState(true);
   const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -46,7 +42,6 @@ const ProductDetailsScreen = () => {
     ? cartItems.some((item) => item.id === product.id)
     : false;
 
-  // --- Handlers ---
   const handleCartAction = () =>
     isInCart
       ? removeFromCart(product.id)
@@ -59,23 +54,19 @@ const ProductDetailsScreen = () => {
       });
   };
 
-  // 🟢 تعديل دالة الـ Share السحرية لتوليد اللينك وفتح القائمة المعروفة
   const handleShare = async () => {
     if (!product) return;
     try {
-      // 1. توليد اللينك: لو ويب بياخد لينك المتصفح الحالي، لو موبايل بيبني اللينك بالدومين
       const productUrl =
         Platform.OS === "web"
           ? window.location.href
-          : `https://nabdpharmacy.com/product/${productId}`; // تقدر تبدل الدومين ده بدومين موقعك لما ترفع الباك إند
+          : `https://nabdpharmacy.com/product/${productId}`;
 
-      // 2. صياغة الرسالة اللي هتظهر مع اللينك
       const shareMessage = `شاهد هذا المنتج على صيدلية نبض: ${product.en_name || product.ar_name}\n\nالرابط: ${productUrl}`;
 
-      // 3. استدعاء القائمة الأصلية للنظام (Native Share Sheet)
       await Share.share({
-        message: shareMessage, // مهم جداً للأندرويد ومتصفحات الويب عشان الرابط يظهر جوه نص الرسالة
-        url: productUrl, // مخصص للـ iOS عشان يظهر اللينك في خانة منفصلة أنيقة
+        message: shareMessage,
+        url: productUrl,
         title: product.en_name || "Nabd Pharmacy",
       });
     } catch (error) {
@@ -83,7 +74,6 @@ const ProductDetailsScreen = () => {
     }
   };
 
-  // --- Data Fetching ---
   useEffect(() => {
     const getDetails = async () => {
       if (!productId) return;
@@ -92,9 +82,8 @@ const ProductDetailsScreen = () => {
         const productData = await productService.getProductById(productId);
         if (productData) {
           setProduct(productData);
-          setIsLoading(false); // وقف التحميل للمنتج الأساسي
+          setIsLoading(false);
 
-          // جلب المنتجات المشابهة في الخلفية
           const categorySlug = productData.categories?.[0]?.slug;
           const allProducts = await productService.getAllProducts({
             is_active: 1,
@@ -119,7 +108,6 @@ const ProductDetailsScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContainer}>
           <TouchableOpacity
@@ -137,7 +125,6 @@ const ProductDetailsScreen = () => {
             {product.en_name}
           </Text>
           <View style={styles.headerActions}>
-            {/* زرار المشاركة هيفضل لوحده هنا بشكل رايق */}
             <TouchableOpacity style={styles.iconBtn} onPress={handleShare}>
               <MaterialIcons name="share" size={24} color="#0f172a" />
             </TouchableOpacity>
@@ -154,7 +141,6 @@ const ProductDetailsScreen = () => {
       >
         <View style={styles.mainWrapper}>
           <View style={[styles.gridContainer, isDesktop && styles.desktopGrid]}>
-            {/* 1. مكعب معرض الصور */}
             <ProductGallery
               images={
                 product.images && product.images.length > 0
@@ -163,7 +149,6 @@ const ProductDetailsScreen = () => {
               }
             />
 
-            {/* 2. مكعب تفاصيل المنتج */}
             <ProductInfo
               product={product}
               quantity={quantity}
@@ -174,7 +159,6 @@ const ProductDetailsScreen = () => {
             />
           </View>
 
-          {/* قسم المنتجات المشابهة */}
           {relatedProducts.length > 0 && (
             <View style={styles.alternativesSection}>
               <View style={styles.altHeader}>
@@ -208,7 +192,8 @@ const ProductDetailsScreen = () => {
                         <Image
                           source={{ uri: imageUri }}
                           style={styles.altImg}
-                          resizeMode="contain"
+                          contentFit="contain"
+                          transition={200}
                         />
                       </View>
                       <Text style={styles.altName} numberOfLines={1}>
@@ -245,7 +230,6 @@ const ProductDetailsScreen = () => {
         <Footer />
       </ScrollView>
 
-      {/* 3. مكعب فوتر الموبايل */}
       {!isDesktop && (
         <MobileFooter
           handleBuyNow={handleBuyNow}

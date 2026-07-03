@@ -1,6 +1,4 @@
-// src/screens/Home/components/Bundles/Bundles.jsx
-
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,26 +13,23 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
 import styles from "./Bundles.styles";
-import { useBundles } from "../../../hook/useBundles";
+import { useBundles } from "./useBundles";
 
-// --- 1. مكون كارت الباقة المنفرد (BundleCard) ---
 const BundleCard = React.memo(({ item }) => {
-  const [isHovered, setIsHovered] = React.useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const { width: windowWidth } = useWindowDimensions();
   const navigation = useNavigation();
 
-  // تحديد عرض الكارت ديناميكياً حسب حجم شاشة الويب أو الموبايل
   const cardWidth = windowWidth > 768 ? 380 : 310;
 
-  const handleHoverIn = () => {
+  const handleHoverIn = useCallback(() => {
     if (Platform.OS === "web") setIsHovered(true);
-  };
+  }, []);
 
-  const handleHoverOut = () => {
+  const handleHoverOut = useCallback(() => {
     if (Platform.OS === "web") setIsHovered(false);
-  };
+  }, []);
 
-  // حسبة ديناميكية سريعة لعدد المنتجات المتوفرة جوة الباقة
   const productsCount =
     item.products_count || (item.products || []).length || 0;
 
@@ -43,7 +38,6 @@ const BundleCard = React.memo(({ item }) => {
       activeOpacity={0.9}
       onMouseEnter={handleHoverIn}
       onMouseLeave={handleHoverOut}
-      // التوجيه لشاشة تفاصيل الباقة وتمرير الـ slug الخاص بها
       onPress={() =>
         navigation.navigate("PackageDetails", { bundleId: item.slug })
       }
@@ -53,7 +47,6 @@ const BundleCard = React.memo(({ item }) => {
         isHovered && styles.cardHovered,
       ]}
     >
-      {/* حاوية الصورة النظيفة */}
       <View style={styles.imageWrapper}>
         <Image
           source={{ uri: item.image_url || "https://via.placeholder.com/350" }}
@@ -63,21 +56,17 @@ const BundleCard = React.memo(({ item }) => {
         />
       </View>
 
-      {/* تفاصيل الكارت السفلي */}
       <View style={styles.cardContent}>
-        {/* اسم الباقة العربي المنسق */}
         <Text style={styles.bundleTitle} numberOfLines={1}>
           {item.name_ar}
         </Text>
 
         <View style={styles.footerGrid}>
-          {/* عداد محتويات الباقة بدلاً من الأسعار المربكة */}
           <View style={{ alignItems: "flex-end" }}>
             <Text style={styles.priceLabel}>تحتوي على</Text>
             <Text style={styles.priceText}>{productsCount} منتجات متميزة</Text>
           </View>
 
-          {/* زر الاستكشاف */}
           <View style={styles.ctaButton}>
             <Text style={styles.ctaText}>اكتشف الباقة</Text>
             <MaterialCommunityIcons
@@ -92,14 +81,11 @@ const BundleCard = React.memo(({ item }) => {
   );
 });
 
-// --- 2. المكون الأساسي للسكشن بالكامل (Bundles) ---
 const Bundles = () => {
   const navigation = useNavigation();
-  // استدعاء الـ Hook وسحب الداتا الحية من سوبابيز
-  const { bundles, loading, error } = useBundles();
+  const { data: bundles = [], isLoading, isError } = useBundles();
 
-  // حالة التحميل الراقية
-  if (loading) {
+  if (isLoading) {
     return (
       <View
         style={[
@@ -116,19 +102,16 @@ const Bundles = () => {
     );
   }
 
-  // إخفاء السكشن تماماً في حالة الخطأ أو عدم وجود بيانات لجمالية التطبيق
-  if (error || bundles.length === 0) return null;
+  const validBundles = Array.isArray(bundles) ? bundles : [];
 
   return (
     <View style={styles.container}>
-      {/* هيدر السكشن الإرشادي */}
       <View style={styles.headerRow}>
         <View style={styles.titleContainer}>
           <View style={styles.indicator} />
           <Text style={styles.sectionTitle}>Shop By Bundle</Text>
         </View>
 
-        {/* زر عرض الكل التفاعلي المربوط بـ شاشتك الجديدة الحريقة 🟢 */}
         <TouchableOpacity
           activeOpacity={0.6}
           onPress={() => navigation.navigate("AllBundles")}
@@ -137,17 +120,26 @@ const Bundles = () => {
         </TouchableOpacity>
       </View>
 
-      {/* قائمة الباقات الأفقية المرنة */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        inverted={Platform.OS !== "web"} // الحفاظ على اتجاه السكرول العربي الصحيح للموبايل
-      >
-        {bundles.map((item) => (
-          <BundleCard key={item.id} item={item} />
-        ))}
-      </ScrollView>
+      {isError ? (
+        <Text style={{ padding: 20, color: "red", textAlign: "center" }}>
+          حدث خطأ في تحميل الباقات
+        </Text>
+      ) : validBundles.length === 0 ? (
+        <Text style={{ padding: 20, textAlign: "center", color: "#666" }}>
+          لا توجد باقات متاحة حالياً
+        </Text>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          inverted={Platform.OS !== "web"}
+        >
+          {validBundles.map((item) => (
+            <BundleCard key={item.id} item={item} />
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 };

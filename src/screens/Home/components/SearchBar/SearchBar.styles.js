@@ -3,20 +3,25 @@ import { COLORS } from "../../../../theme/colors";
 
 export const styles = StyleSheet.create({
   mainWrapper: {
-    zIndex: 9999,
+    zIndex: 99999,
     width: "100%",
     position: "relative",
     marginTop: 5,
     marginBottom: 10,
+    ...Platform.select({
+      android: {
+        elevation: 999,
+      },
+    }),
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff", // 🟢 أبيض صريح عشان ينطق ويبرز من الصفحة
+    backgroundColor: "#ffffff",
     height: 52,
     borderRadius: 26,
     borderWidth: 1.5,
-    borderColor: "#cbd5e1", // 🟢 بوردر أغمق شوية عشان يحدد البوكس بوضوح
+    borderColor: "#cbd5e1",
     paddingHorizontal: 16,
     ...Platform.select({
       ios: {
@@ -39,7 +44,7 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
     color: COLORS.slate900,
-    outlineStyle: "none", // عشان نشيل الأوتلاين الأسود في الديسكتوب لو موجود
+    outlineStyle: "none",
   },
   clearBtn: {
     backgroundColor: "#f1f5f9",
@@ -56,7 +61,7 @@ export const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    zIndex: 10001,
+    zIndex: 100001,
     ...Platform.select({
       ios: {
         shadowColor: "#64748b",
@@ -65,7 +70,7 @@ export const styles = StyleSheet.create({
         shadowRadius: 15,
       },
       android: {
-        elevation: 8,
+        elevation: 1001,
       },
     }),
     maxHeight: 260,

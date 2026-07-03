@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,41 +11,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { styles } from "./ShopByCategory.styles";
 import { COLORS } from "../../../../theme/colors";
-import apiClient from "../../../../services/apiClient";
-
+import { useCategoriesLevel1 } from "./useCategoriesLevel1";
 const ShopByCategory = () => {
-  const [categories, setCategories] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [containerWidth, setContainerWidth] = useState(0);
   const navigation = useNavigation();
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        // 🟢 التعديل هنا: بننادي على الـ API الجديد الخاص بـ Level 1
-        const response = await apiClient.get("/categories/level-1");
-
-        // فلترة الأقسام عشان نعرض بس اللي ليهم صور
-        const filteredCategories = response.data.filter(
-          (cat) => cat.img_url && cat.img_url.trim() !== "",
-        );
-
-        setCategories(filteredCategories);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchCategories();
-  }, []);
+  const { data: categories = [], isLoading, isError } = useCategoriesLevel1();
 
   const handleLayout = (event) => {
     const { width } = event.nativeEvent.layout;
     setContainerWidth(width);
   };
 
-  // دالة حساب عرض الكارت بناءً على عرض الشاشة (Grid Logic)
   const getCardStyle = () => {
     if (containerWidth === 0) return { width: "48%" };
     const gap = 16;
@@ -67,12 +44,10 @@ const ShopByCategory = () => {
     );
   }
 
-  // لو مفيش أقسام رجعت (بسبب إن الأقسام اللي ليها صور مفهاش منتجات)، مش هنعرض السكشن
-  if (categories.length === 0) return null;
+  if (isError || categories.length === 0) return null;
 
   return (
     <View style={styles.section}>
-      {/* Header Section */}
       <View style={styles.headerRow}>
         <View style={styles.titleWrapper}>
           <View style={styles.indicator} />
@@ -91,7 +66,6 @@ const ShopByCategory = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Grid Container */}
       <View style={styles.gridContainer} onLayout={handleLayout}>
         {categories.map((cat) => (
           <TouchableOpacity
@@ -121,16 +95,6 @@ const ShopByCategory = () => {
             </LinearGradient>
           </TouchableOpacity>
         ))}
-
-        {/* View All Card */}
-        {/* <TouchableOpacity
-          style={[styles.viewAllCard, getCardStyle()]}
-          activeOpacity={0.6}
-          onPress={() => navigation.navigate("Store")}
-        >
-          <MaterialIcons name="grid-view" size={36} color={COLORS.primary} />
-          <Text style={styles.viewAllCardText}>All Categories</Text>
-        </TouchableOpacity> */}
       </View>
     </View>
   );

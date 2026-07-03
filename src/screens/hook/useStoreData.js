@@ -1,5 +1,3 @@
-// src/screens/hook/useStoreData.js
-
 import { useState, useEffect, useCallback } from "react";
 import { useRoute } from "@react-navigation/native";
 import apiClient from "../../services/apiClient";
@@ -10,22 +8,23 @@ export const useStoreData = (flatListRef) => {
 
   const [isFirstLoad, setIsFirstLoad] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
-
-  // 🟢 1. ضفنا حالة السحب للتحديث للستور
   const [refreshing, setRefreshing] = useState(false);
-
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-
   const [searchQuery, setSearchQuery] = useState("");
-  const [allCategoriesData, setAllCategoriesData] = useState([]);
-  const [availableCategoryNames, setAvailableCategoryNames] = useState([]);
-  const [availableBrands, setAvailableBrands] = useState([]);
 
+  const [allCategoriesData, setAllCategoriesData] = useState([]);
+  const [availableBrands, setAvailableBrands] = useState([]);
   const [activeCategorySlug, setActiveCategorySlug] = useState(null);
   const [activeCategoryName, setActiveCategoryName] = useState(null);
   const [selectedBrands, setSelectedBrands] = useState([]);
+
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [onSaleOnly, setOnSaleOnly] = useState(false);
+
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   useEffect(() => {
@@ -45,9 +44,7 @@ export const useStoreData = (flatListRef) => {
       setActiveCategoryName(route.params.categoryName);
       shouldResetPage = true;
     }
-    if (shouldResetPage) {
-      setCurrentPage(1);
-    }
+    if (shouldResetPage) setCurrentPage(1);
   }, [route.params]);
 
   useEffect(() => {
@@ -58,24 +55,19 @@ export const useStoreData = (flatListRef) => {
           apiClient.get("/products/brands"),
         ]);
         setAllCategoriesData(catResponse.data);
-        setAvailableCategoryNames(catResponse.data.map((c) => c.name));
         setAvailableBrands(brandResponse.data);
       } catch (error) {
-        console.error("Initial Data Error:", error);
+        console.error(error);
       }
     };
     fetchInitialData();
   }, []);
 
-  // 🟢 2. عدلنا دالة جلب البيانات عشان تقبل باراميتر التحديث الخفيف
   const fetchProducts = useCallback(
     async (isPullToRefresh = false) => {
       try {
-        if (isPullToRefresh) {
-          setRefreshing(true);
-        } else {
-          setIsFetching(true);
-        }
+        if (isPullToRefresh) setRefreshing(true);
+        else setIsFetching(true);
 
         const offset = (currentPage - 1) * ITEMS_PER_PAGE;
         let queryStr = `?limit=${ITEMS_PER_PAGE}&offset=${offset}`;
@@ -84,45 +76,60 @@ export const useStoreData = (flatListRef) => {
           queryStr += `&search=${encodeURIComponent(searchQuery)}`;
         if (activeCategorySlug)
           queryStr += `&category_slug=${encodeURIComponent(activeCategorySlug)}`;
+
         if (selectedBrands.length > 0) {
-          selectedBrands.forEach(
-            (b) => (queryStr += `&brands=${encodeURIComponent(b)}`),
-          );
+          selectedBrands.forEach((b) => {
+            queryStr += `&brands=${encodeURIComponent(b)}`;
+          });
         }
+
+        if (minPrice !== "") queryStr += `&min_price=${minPrice}`;
+        if (maxPrice !== "") queryStr += `&max_price=${maxPrice}`;
+
+        if (inStockOnly) queryStr += `&in_stock_only=true`;
+        if (onSaleOnly) queryStr += `&on_sale_only=true`;
 
         const response = await apiClient.get(`/products/${queryStr}`);
         const data = response.data.products || response.data;
         setProducts(data);
         setTotalProducts(response.data.total || data.length);
       } catch (error) {
-        console.error("Fetch Products Error:", error);
+        console.error(error);
       } finally {
         setIsFirstLoad(false);
         setIsFetching(false);
-        setRefreshing(false); // 🟢 قفل علامة التحميل عند الانتهاء
+        setRefreshing(false);
       }
     },
-    [activeCategorySlug, selectedBrands, currentPage, searchQuery],
+    [
+      activeCategorySlug,
+      selectedBrands,
+      currentPage,
+      searchQuery,
+      minPrice,
+      maxPrice,
+      inStockOnly,
+      onSaleOnly,
+    ],
   );
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
-  // 🟢 3. دالة السحب للتحديث للستور
   const onRefresh = useCallback(() => {
     fetchProducts(true);
   }, [fetchProducts]);
 
-  const handleCategoryChange = (catName) => {
+  const handleCategoryChange = (categorySlug) => {
     setCurrentPage(1);
-    if (!catName) {
+    if (!categorySlug) {
       setActiveCategoryName(null);
       setActiveCategorySlug(null);
     } else {
-      setActiveCategoryName(catName);
-      const matchedCat = allCategoriesData.find((c) => c.name === catName);
-      setActiveCategorySlug(matchedCat ? matchedCat.slug : null);
+      setActiveCategorySlug(categorySlug);
+      const matchedCat = allCategoriesData.find((c) => c.slug === categorySlug);
+      setActiveCategoryName(matchedCat ? matchedCat.name : null);
     }
   };
 
@@ -138,6 +145,10 @@ export const useStoreData = (flatListRef) => {
     setActiveCategorySlug(null);
     setSelectedBrands([]);
     setSearchQuery("");
+    setMinPrice("");
+    setMaxPrice("");
+    setInStockOnly(false);
+    setOnSaleOnly(false);
     setCurrentPage(1);
     setIsFilterModalOpen(false);
   };
@@ -145,6 +156,7 @@ export const useStoreData = (flatListRef) => {
   const handleApplyFilters = () => {
     setIsFilterModalOpen(false);
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    fetchProducts();
   };
 
   const handlePageChange = (pageNumber) => {
@@ -157,7 +169,7 @@ export const useStoreData = (flatListRef) => {
   return {
     isFirstLoad,
     isFetching,
-    refreshing, // 🟢 خرجناها للشاشة
+    refreshing,
     products,
     totalProducts,
     currentPage,
@@ -165,9 +177,10 @@ export const useStoreData = (flatListRef) => {
     searchQuery,
     setSearchQuery,
     setCurrentPage,
-    availableCategoryNames,
+    categoriesData: allCategoriesData,
     availableBrands,
     activeCategoryName,
+    activeCategorySlug,
     selectedBrands,
     isFilterModalOpen,
     setIsFilterModalOpen,
@@ -176,6 +189,14 @@ export const useStoreData = (flatListRef) => {
     handleClearFilters,
     handleApplyFilters,
     handlePageChange,
-    onRefresh, // 🟢 خرجناها للشاشة
+    onRefresh,
+    minPrice,
+    setMinPrice,
+    maxPrice,
+    setMaxPrice,
+    inStockOnly,
+    setInStockOnly,
+    onSaleOnly,
+    setOnSaleOnly,
   };
 };
