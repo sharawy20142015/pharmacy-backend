@@ -13,15 +13,18 @@ import { initGTM, logGTMEvent } from "./src/utils/analytics";
 
 const queryClient = new QueryClient();
 
+// إعدادات اللينكات (Deep Linking & Web Routing)
 const linking = {
   prefixes: [
     Linking.createURL("/"),
     "http://localhost:8081",
     "http://10.100.16.30:8081",
     "http://54.234.4.149:8081",
-    "https://pharmacy-app-domain.com",
+    "https://nabdpharmacy.com",
+    "https://www.nabdpharmacy.com",
   ],
   config: {
+    initialRouteName: "MainTabs",
     screens: {
       AdminDashboard: "admin/dashboard",
       MainTabs: {
@@ -38,13 +41,12 @@ const linking = {
           Cart: "cart",
           Account: {
             path: "user",
-            screens: {
-              Profile: "profile",
-            },
+            screens: { Profile: "profile" },
           },
         },
       },
       Login: "login",
+      // تم إعادتها للـ Root لتتطابق مع مكانها في AppNavigator
       ProductDetails: "product/:productId",
       PackageDetails: "package/:bundleId",
       AllBundles: "all-bundles",
@@ -84,20 +86,25 @@ export default function App() {
                 linking={linking}
                 fallback={null}
                 onReady={() => {
-                  routeNameRef.current =
-                    navigationRef.current.getCurrentRoute().name;
-                  logGTMEvent("page_view", { page_path: routeNameRef.current });
+                  if (navigationRef.current) {
+                    routeNameRef.current =
+                      navigationRef.current.getCurrentRoute()?.name;
+                    logGTMEvent("page_view", {
+                      page_path: routeNameRef.current,
+                    });
+                  }
                 }}
                 onStateChange={async () => {
-                  const previousRouteName = routeNameRef.current;
-                  const currentRouteName =
-                    navigationRef.current.getCurrentRoute().name;
+                  if (navigationRef.current) {
+                    const previousRouteName = routeNameRef.current;
+                    const currentRouteName =
+                      navigationRef.current.getCurrentRoute()?.name;
 
-                  if (previousRouteName !== currentRouteName) {
-                    logGTMEvent("page_view", { page_path: currentRouteName });
+                    if (previousRouteName !== currentRouteName) {
+                      logGTMEvent("page_view", { page_path: currentRouteName });
+                    }
+                    routeNameRef.current = currentRouteName;
                   }
-
-                  routeNameRef.current = currentRouteName;
                 }}
               >
                 <AppNavigator />

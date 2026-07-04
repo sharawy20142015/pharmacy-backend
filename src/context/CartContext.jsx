@@ -1,102 +1,116 @@
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useContext, useMemo, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
-  const [cartItems, setCartItems] = useState([]);
-  const [isLoaded, setIsLoaded] = useState(false); // للتأكد من تحميل البيانات قبل البدء في الحفظ
+  const queryClient = useQueryClient();
 
-  // 1. تحميل السلة من الذاكرة المحلية (AsyncStorage) عند تشغيل التطبيق
-  useEffect(() => {
-    const loadCart = async () => {
-      try {
-        const storedCart = await AsyncStorage.getItem("@cart_items");
-        if (storedCart !== null) {
-          setCartItems(JSON.parse(storedCart));
-        }
-      } catch (error) {
-        console.error("خطأ في تحميل السلة من الذاكرة:", error);
-      } finally {
-        setIsLoaded(true); // تم الانتهاء من التحميل
+  // 1. استخدام useQuery لتحميل السلة من AsyncStorage
+  const { data: cartItems = [], isSuccess: isLoaded } = useQuery({
+    queryKey: ["cartItems"],
+    queryFn: async () => {
+      const storedCart = await AsyncStorage.getItem("@cart_items");
+      return storedCart ? JSON.parse(storedCart) : [];
+    },
+  });
+
+  // 2. استخدام useMutation لحفظ أي تعديل في السلة
+  const { mutate: updateCart } = useMutation({
+    mutationFn: async (newCartItems) => {
+      await AsyncStorage.setItem("@cart_items", JSON.stringify(newCartItems));
+      return newCartItems;
+    },
+    onMutate: async (newCartItems) => {
+      // Optimistic Update: تحديث الكاش فوراً عشان الـ UI يتحدث بدون انتظار
+      await queryClient.cancelQueries({ queryKey: ["cartItems"] });
+      const previousCart = queryClient.getQueryData(["cartItems"]);
+      queryClient.setQueryData(["cartItems"], newCartItems);
+      return { previousCart };
+    },
+    onError: (err, newCartItems, context) => {
+      // لو حصل خطأ في الحفظ، نرجع للداتا القديمة
+      if (context?.previousCart) {
+        queryClient.setQueryData(["cartItems"], context.previousCart);
       }
-    };
-    loadCart();
-  }, []);
+      console.error("خطأ في حفظ السلة:", err);
+    },
+    onSettled: () => {
+      // التأكد من مزامنة البيانات في النهاية
+      queryClient.invalidateQueries({ queryKey: ["cartItems"] });
+    },
+  });
 
-  // 2. حفظ السلة في الذاكرة تلقائياً عند أي تغيير (إضافة، حذف، تعديل كمية)
-  useEffect(() => {
-    const saveCart = async () => {
-      if (isLoaded) {
-        try {
-          await AsyncStorage.setItem("@cart_items", JSON.stringify(cartItems));
-        } catch (error) {
-          console.error("خطأ في حفظ السلة:", error);
-        }
-      }
-    };
-    saveCart();
-  }, [cartItems, isLoaded]);
-
-  // إضافة منتج جديد للسلة أو زيادة الكمية إذا كان موجوداً
-  const addToCart = (product) => {
-    setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === product.id);
+  // 3. استخدام useCallback لمنع إعادة إنشاء الدوال مع كل Render
+  const addToCart = useCallback(
+    (product) => {
+      const existingItem = cartItems.find((item) => item.id === product.id);
+      let newCart;
 
       if (existingItem) {
-        return prevItems.map((item) =>
+        newCart = cartItems.map((item) =>
           item.id === product.id ? { ...item, qty: item.qty + 1 } : item,
         );
+      } else {
+        newCart = [
+          ...cartItems,
+          {
+            ...product,
+            qty: 1,
+            title: product.en_name || product.ar_name || product.title,
+            desc: product.header || product.Brand_Name || product.desc,
+            price: product.final_price || product.price,
+          },
+        ];
       }
+      updateCart(newCart);
+    },
+    [cartItems, updateCart],
+  );
 
-      // إضافة المنتج مع نسخ كافة خصائصه (بما في ذلك الصور)
-      return [
-        ...prevItems,
-        {
-          ...product,
-          qty: 1,
-          title: product.en_name || product.ar_name || product.title,
-          desc: product.header || product.Brand_Name || product.desc,
-          price: product.final_price || product.price,
-        },
-      ];
-    });
-  };
+  const updateQty = useCallback(
+    (id, newQty) => {
+      if (newQty < 1) return;
+      const newCart = cartItems.map((item) =>
+        item.id === id ? { ...item, qty: newQty } : item,
+      );
+      updateCart(newCart);
+    },
+    [cartItems, updateCart],
+  );
 
-  // تحديث كمية منتج معين
-  const updateQty = (id, newQty) => {
-    if (newQty < 1) return;
-    setCartItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, qty: newQty } : item)),
-    );
-  };
+  const removeFromCart = useCallback(
+    (id) => {
+      const newCart = cartItems.filter((item) => item.id !== id);
+      updateCart(newCart);
+    },
+    [cartItems, updateCart],
+  );
 
-  // حذف منتج معين من السلة
-  const removeFromCart = (id) => {
-    setCartItems((prev) => prev.filter((item) => item.id !== id));
-  };
+  const clearCart = useCallback(() => {
+    updateCart([]);
+  }, [updateCart]);
 
-  // ✅ الدالة الجديدة: تفريغ السلة بالكامل (مهمة لصفحة Checkout)
-  const clearCart = () => {
-    setCartItems([]);
-  };
+  // 4. استخدام useMemo لتمرير القيم للـ Provider
+  // (هذا يمنع إعادة تصيير كل المكونات التي تستخدم الـ Context إلا إذا تغيرت هذه القيم فعلياً)
+  const contextValue = useMemo(
+    () => ({
+      cartItems,
+      isLoaded,
+      addToCart,
+      updateQty,
+      removeFromCart,
+      clearCart,
+    }),
+    [cartItems, isLoaded, addToCart, updateQty, removeFromCart, clearCart],
+  );
 
   return (
-    <CartContext.Provider
-      value={{
-        cartItems,
-        addToCart,
-        updateQty,
-        removeFromCart,
-        clearCart, // تم تمرير الدالة هنا لتصبح متاحة في كل التطبيق
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+    <CartContext.Provider value={contextValue}>{children}</CartContext.Provider>
   );
 };
 
-// Hook مخصص لاستخدام السلة بسهولة
 export const useCart = () => {
   const context = useContext(CartContext);
   if (!context) {

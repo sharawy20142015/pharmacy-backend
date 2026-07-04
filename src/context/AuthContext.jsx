@@ -8,7 +8,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // مفتاح التخزين الموحد
   const STORAGE_KEY = "userData";
 
   useEffect(() => {
@@ -19,7 +18,6 @@ export const AuthProvider = ({ children }) => {
     try {
       let authDataSerialized;
 
-      // التبديل بين الويب والموبايل
       if (Platform.OS === "web") {
         authDataSerialized = window.localStorage.getItem(STORAGE_KEY);
       } else {
@@ -28,31 +26,17 @@ export const AuthProvider = ({ children }) => {
 
       if (authDataSerialized) {
         const _user = JSON.parse(authDataSerialized);
-        // التأكد من أن البيانات تحتوي على الـ role قبل تعيينها
         setUser(_user);
-        console.log(
-          "🔐 AuthContext: User loaded from storage:",
-          _user.email,
-          "Role:",
-          _user.role,
-        );
-      } else {
-        console.log("ℹ️ AuthContext: No user found in storage.");
       }
     } catch (error) {
-      console.error("❌ AuthContext: Error loading storage data", error);
     } finally {
-      // صمام الأمان: نوقف التحميل مهما كانت النتيجة لتظهر شاشة اللوجن أو المتجر
       setIsLoading(false);
     }
   };
 
-  // دالة تسجيل الدخول
   const login = async (userData) => {
     try {
-      // نحدث الحالة فوراً (مهم جداً للـ Navigator)
       setUser(userData);
-
       const stringifiedData = JSON.stringify(userData);
 
       if (Platform.OS === "web") {
@@ -60,14 +44,9 @@ export const AuthProvider = ({ children }) => {
       } else {
         await AsyncStorage.setItem(STORAGE_KEY, stringifiedData);
       }
-
-      console.log("✅ AuthContext: Login successful for:", userData.role);
-    } catch (error) {
-      console.error("❌ AuthContext: Error saving login data", error);
-    }
+    } catch (error) {}
   };
 
-  // دالة تسجيل الخروج
   const logout = async () => {
     try {
       setUser(null);
@@ -76,10 +55,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         await AsyncStorage.removeItem(STORAGE_KEY);
       }
-      console.log("👋 AuthContext: Logout successful");
-    } catch (error) {
-      console.error("❌ AuthContext: Error during logout", error);
-    }
+    } catch (error) {}
   };
 
   return (

@@ -15,8 +15,8 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 32,
     gap: 16,
-    zIndex: 1,
-    elevation: 1,
+    zIndex: 10, // 👈 قللناها عشان السيرش يغطي عليها
+    elevation: 10, // 👈 قللناها
   },
   breadcrumb: { flexDirection: "row", alignItems: "center", gap: 8 },
   crumbText: { fontSize: 14, fontWeight: "600", color: "#64748b" },
@@ -26,6 +26,8 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     justifyContent: "flex-end",
+    zIndex: 20, // 👈 عشان سيرش الديسكتوب
+    elevation: 20,
   },
   mobileFilterBtn: {
     flexDirection: "row",

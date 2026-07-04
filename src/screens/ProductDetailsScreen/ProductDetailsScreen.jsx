@@ -69,9 +69,7 @@ const ProductDetailsScreen = () => {
         url: productUrl,
         title: product.en_name || "Nabd Pharmacy",
       });
-    } catch (error) {
-      console.error("Error sharing product:", error);
-    }
+    } catch (error) {}
   };
 
   useEffect(() => {
@@ -82,7 +80,6 @@ const ProductDetailsScreen = () => {
         const productData = await productService.getProductById(productId);
         if (productData) {
           setProduct(productData);
-          setIsLoading(false);
 
           const categorySlug = productData.categories?.[0]?.slug;
           const allProducts = await productService.getAllProducts({
@@ -97,6 +94,7 @@ const ProductDetailsScreen = () => {
           }
         }
       } catch (error) {
+      } finally {
         setIsLoading(false);
       }
     };

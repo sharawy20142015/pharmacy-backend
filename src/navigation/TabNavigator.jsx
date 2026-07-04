@@ -47,7 +47,6 @@ const StoreStack = () => (
     }}
   >
     <Stack.Screen name="StoreMain" component={StoreScreen} />
-    <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
   </Stack.Navigator>
 );
 
@@ -59,9 +58,6 @@ const HomeStack = () => (
     }}
   >
     <Stack.Screen name="HomeMain" component={HomeScreen} />
-    <Stack.Screen name="ProductDetails" component={ProductDetailsScreen} />
-    <Stack.Screen name="PackageDetails" component={PackageDetailsScreen} />
-    <Stack.Screen name="AllBundles" component={AllBundlesScreen} />
   </Stack.Navigator>
 );
 
@@ -149,12 +145,10 @@ const AppNavigator = () => {
     };
   }, []);
 
-  if (authLoading) {
-    return <LoadingScreen />;
-  }
-
   return (
     <View style={{ flex: 1 }}>
+      {/* هنا السر: الـ Navigator دايماً मौजूद وشايف كل الشاشات عشان يلقط اللينك فوراً
+       */}
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -182,6 +176,15 @@ const AppNavigator = () => {
         </Stack.Group>
       </Stack.Navigator>
 
+      {/* طبقة التحميل بقت Overlay بتغطي الشاشة لحد ما الـ Auth يخلص، 
+        ومن غير ما تمسح الـ Navigator من الخلفية 
+      */}
+      {authLoading && (
+        <View style={styles.authLoadingOverlay}>
+          <LoadingScreen />
+        </View>
+      )}
+
       <GlobalLoadingOverlay />
     </View>
   );
@@ -195,6 +198,12 @@ const styles = StyleSheet.create({
     elevation: 9999,
     justifyContent: "center",
     alignItems: "center",
+  },
+  authLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#ffffff",
+    zIndex: 10000,
+    elevation: 10000,
   },
 });
 

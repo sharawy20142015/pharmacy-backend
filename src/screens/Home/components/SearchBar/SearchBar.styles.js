@@ -3,16 +3,12 @@ import { COLORS } from "../../../../theme/colors";
 
 export const styles = StyleSheet.create({
   mainWrapper: {
-    zIndex: 99999,
     width: "100%",
-    position: "relative",
+    position: "relative", // 👈 مهم جداً يفضل relative عشان القائمة تنزل تحته
     marginTop: 5,
     marginBottom: 10,
-    ...Platform.select({
-      android: {
-        elevation: 999,
-      },
-    }),
+    zIndex: 999999, // 👈 أرقام ضخمة لضمان التفوق في الطبقات
+    elevation: 9999,
   },
   searchContainer: {
     flexDirection: "row",
@@ -23,15 +19,14 @@ export const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#cbd5e1",
     paddingHorizontal: 16,
+    zIndex: 999999,
+    elevation: 9999,
     ...Platform.select({
       ios: {
         shadowColor: "#94a3b8",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
         shadowRadius: 6,
-      },
-      android: {
-        elevation: 3,
       },
     }),
   },
@@ -44,7 +39,9 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
     color: COLORS.slate900,
-    outlineStyle: "none",
+    ...Platform.select({
+      web: { outlineStyle: "none" },
+    }),
   },
   clearBtn: {
     backgroundColor: "#f1f5f9",
@@ -54,14 +51,17 @@ export const styles = StyleSheet.create({
   },
   suggestionsBox: {
     position: "absolute",
-    top: 60,
+    top: 60, // 👈 ينزل تحت السيرش بثبات
     left: 0,
     right: 0,
     backgroundColor: "#ffffff",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#e2e8f0",
-    zIndex: 100001,
+    zIndex: 9999999, // 👈 أعلى طبقة ممكنة للقائمة
+    elevation: 9999,
+    maxHeight: 260,
+    overflow: "hidden",
     ...Platform.select({
       ios: {
         shadowColor: "#64748b",
@@ -70,11 +70,12 @@ export const styles = StyleSheet.create({
         shadowRadius: 15,
       },
       android: {
-        elevation: 1001,
+        elevation: 20,
+      },
+      web: {
+        boxShadow: "0px 10px 30px rgba(0,0,0,0.15)", // ظل يبرزها على الويب
       },
     }),
-    maxHeight: 260,
-    overflow: "hidden",
   },
   suggestionItem: {
     flexDirection: "row",
@@ -84,6 +85,7 @@ export const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f1f5f9",
     gap: 12,
+    backgroundColor: "#ffffff", // 👈 حطينا لون خلفية صريح عشان لو وراها صور متظهرش من خلالها
   },
   iconCircle: {
     width: 32,

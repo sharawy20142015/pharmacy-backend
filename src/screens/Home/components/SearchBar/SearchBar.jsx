@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   ScrollView,
+  Platform, // 👈 ضفنا دي عشان التعديلات الخاصة بالويب
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -62,7 +63,10 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
   }, [text, route.name, navigation, onSearch]);
 
   return (
-    <View style={styles.mainWrapper}>
+    // 👈 ضفنا zIndex مباشر هنا عشان نجبر الويب يحترمه
+    <View
+      style={[styles.mainWrapper, Platform.OS === "web" && { zIndex: 999999 }]}
+    >
       <View style={styles.searchContainer}>
         <MaterialIcons
           name="search"
@@ -97,7 +101,12 @@ const SearchBar = ({ onSearch, initialValue = "" }) => {
       </View>
 
       {suggestions.length > 0 && (
-        <View style={styles.suggestionsBox}>
+        <View
+          style={[
+            styles.suggestionsBox,
+            Platform.OS === "web" && { zIndex: 9999999 },
+          ]}
+        >
           <ScrollView
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled={true}

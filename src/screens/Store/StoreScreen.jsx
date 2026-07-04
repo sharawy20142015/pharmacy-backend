@@ -330,13 +330,14 @@ const StoreScreen = () => {
                   { flex: 1 },
                   Platform.OS === "web" && { overscrollBehaviorY: "contain" },
                 ]}
+                ListHeaderComponentStyle={{ zIndex: 9999, elevation: 9999 }} // 👈 تم إضافة السطر السحري هنا لفك حصار غلاف الهيدر الافتراضي
                 ListHeaderComponent={
                   <View
                     style={{
                       paddingBottom: 12,
                       backgroundColor: "#f6f8f7",
-                      zIndex: 50,
-                      elevation: 50,
+                      zIndex: 1000,
+                      elevation: 1000,
                     }}
                   >
                     {!isDesktop && (
@@ -344,8 +345,8 @@ const StoreScreen = () => {
                         style={{
                           marginBottom: 12,
                           paddingHorizontal: 4,
-                          zIndex: 100,
-                          elevation: 10,
+                          zIndex: 2000,
+                          elevation: 2000,
                         }}
                       >
                         <SearchBar
@@ -363,9 +364,16 @@ const StoreScreen = () => {
                           color="#94a3b8"
                         />
                         <Text style={styles.crumbActive}>
-                          {activeCategoryName || "All Products"}
+                          {activeCategoryName
+                            ? activeCategoryName
+                            : selectedBrands?.length === 1
+                              ? selectedBrands[0]
+                              : selectedBrands?.length > 1
+                                ? `All Products (${selectedBrands.length} Brands)`
+                                : "All Products"}
                         </Text>
                       </View>
+
                       <View style={styles.toolsActions}>
                         {isDesktop && (
                           <SearchBar

@@ -18,7 +18,6 @@ import Header from "../../components/UI/Header/Header";
 import Footer from "../../components/UI/Footer/Footer";
 import { useCart } from "../../context/CartContext";
 
-// --- كارت المنتج داخل السلة ---
 const CartItem = ({ item, onUpdateQty, onRemove, isMobile }) => {
   let imageUri = "https://via.placeholder.com/150";
 
@@ -109,7 +108,7 @@ const CartItem = ({ item, onUpdateQty, onRemove, isMobile }) => {
               </View>
               <TouchableOpacity
                 style={styles.removeBtn}
-                onPress={() => onRemove(item.id)} // 🟢 الحدث هنا سيشغل GTM تلقائياً من الـ Context
+                onPress={() => onRemove(item.id)}
               >
                 <MaterialIcons name="delete" size={18} color="#ef4444" />
                 <Text style={styles.removeText}>Remove</Text>
@@ -122,12 +121,10 @@ const CartItem = ({ item, onUpdateQty, onRemove, isMobile }) => {
   );
 };
 
-// --- الشاشة الرئيسية للسلة ---
 const CartScreen = () => {
   const { width } = useWindowDimensions();
   const navigation = useNavigation();
 
-  // 🟢 استدعاء الدوال من الـ Context (التي تحتوي الآن على منطق GTM)
   const { cartItems, updateQty, removeFromCart } = useCart();
   const [promoCode, setPromoCode] = useState("");
 
@@ -139,7 +136,6 @@ const CartScreen = () => {
     0,
   );
 
-  const deliveryFee = 0;
   const total = subtotal;
 
   if (cartItems.length === 0) {
@@ -203,14 +199,13 @@ const CartScreen = () => {
                     key={item.id}
                     item={item}
                     onUpdateQty={updateQty}
-                    onRemove={removeFromCart} // 🟢 الربط هنا
+                    onRemove={removeFromCart}
                     isMobile={isMobile}
                   />
                 ))}
               </View>
             </View>
 
-            {/* Order Summary */}
             <View
               style={[
                 styles.summarySection,
@@ -256,7 +251,14 @@ const CartScreen = () => {
                 </View>
 
                 <View style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>Total</Text>
+                  <View>
+                    <Text style={styles.totalLabel}>Estimated Total</Text>
+                    <Text
+                      style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}
+                    >
+                      Excl. delivery
+                    </Text>
+                  </View>
                   <Text style={styles.totalVal}>EGP {total.toFixed(2)}</Text>
                 </View>
 

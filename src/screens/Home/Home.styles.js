@@ -1,5 +1,6 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 import { COLORS } from "../../theme/colors";
+
 export const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -7,13 +8,18 @@ export const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingBottom: Platform.OS === "web" ? 60 : 100,
   },
   container: {
     paddingHorizontal: 16,
-    paddingTop: 24,
-    maxWidth: 1280, // عشان لو فتحته ويب
+    paddingTop: 16,
+    paddingBottom: 24,
+    maxWidth: 1280,
     alignSelf: "center",
+    width: "100%",
+  },
+  sectionGap: {
+    marginTop: 24,
     width: "100%",
   },
 });
