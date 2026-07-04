@@ -1,24 +1,20 @@
-// src/screens/AllBundles/AllBundlesScreen.jsx
-
 import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   SafeAreaView,
-  TouchableOpacity,
   ActivityIndicator,
   useWindowDimensions,
-  Platform,
 } from "react-native";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
+import { Pressable } from "react-native";
 
 import { styles } from "./AllBundlesScreen.styles";
 import { useBundles } from "../hook/useBundles";
 
-// مكون الكارت الداخلي
 const BundleGridCard = React.memo(({ item, cardWidth }) => {
   const [isHovered, setIsHovered] = useState(false);
   const navigation = useNavigation();
@@ -27,11 +23,9 @@ const BundleGridCard = React.memo(({ item, cardWidth }) => {
     item.products_count || (item.products || []).length || 0;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onMouseEnter={() => Platform.OS === "web" && setIsHovered(true)}
-      onMouseLeave={() => Platform.OS === "web" && setIsHovered(false)}
-      // 🟢 هنا التوجيه لنفس الشاشة اللي برمجناها!
+    <Pressable
+      onHoverIn={() => setIsHovered(true)}
+      onHoverOut={() => setIsHovered(false)}
       onPress={() =>
         navigation.navigate("PackageDetails", { bundleId: item.slug })
       }
@@ -76,35 +70,29 @@ const BundleGridCard = React.memo(({ item, cardWidth }) => {
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 });
 
-// الشاشة الرئيسية
 const AllBundlesScreen = () => {
   const navigation = useNavigation();
   const { bundles, loading, error } = useBundles();
   const { width } = useWindowDimensions();
 
-  // حساب عرض الكروت ديناميكياً عشان يملوا الشاشة زي الـ Grid في الويب
   const isDesktop = width >= 1024;
   const isTablet = width >= 768 && width < 1024;
 
-  let cardWidth = "100%"; // للموبايل كارت واحد بالعرض
-  if (isTablet) cardWidth = "48%"; // للتابلت كارتين جنب بعض
-  if (isDesktop) cardWidth = "32%"; // للكمبيوتر 3 كروت جنب بعض
+  let cardWidth = "100%";
+  if (isTablet) cardWidth = "48%";
+  if (isDesktop) cardWidth = "32%";
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* الهيدر */}
       <View style={styles.header}>
         <View style={styles.headerContainer}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={styles.backBtn}
-          >
+          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-forward" size={24} color="#006c49" />
-          </TouchableOpacity>
+          </Pressable>
           <Text style={styles.headerTitle}>جميع الباقات</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -112,14 +100,12 @@ const AllBundlesScreen = () => {
 
       <ScrollView showsVerticalScrollIndicator={true} style={styles.scrollView}>
         <View style={styles.scrollContent}>
-          {/* نصوص الهيرو */}
           <Text style={styles.heroTitle}>الباقات والعروض الحصرية</Text>
           <Text style={styles.heroSub}>
             اختر مجموعتك المفضلة ووفر أكثر مع حلولنا الصحية المتكاملة المصممة
             خصيصاً لك.
           </Text>
 
-          {/* حالات التحميل والخطأ */}
           {loading ? (
             <ActivityIndicator
               size="large"
@@ -136,7 +122,6 @@ const AllBundlesScreen = () => {
               </Text>
             </View>
           ) : (
-            /* شبكة الباقات */
             <View style={styles.gridContainer}>
               {bundles.map((item) => (
                 <BundleGridCard

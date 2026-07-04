@@ -53,12 +53,12 @@ export const styles = StyleSheet.create({
     position: "relative",
   },
   logoSection: {
-    paddingTop: 48, // زيادة الـ Padding العلوي
+    paddingTop: 48,
     paddingBottom: 32,
     alignItems: "center",
   },
   logoCircle: {
-    width: 72, // تكبير اللوجو قليلاً
+    width: 72,
     height: 72,
     borderRadius: 36,
     backgroundColor: "rgba(16, 183, 72, 0.08)",
@@ -95,14 +95,12 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingBottom: 32,
   },
-
-  // --- زرار جوجل الأساسي الجديد ---
   primaryGoogleBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.white,
-    height: 60, // زرار أكبر
+    height: 60,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: COLORS.slate200,
@@ -120,7 +118,6 @@ export const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.slate700,
   },
-
   banner: {
     marginHorizontal: 32,
     marginBottom: 32,

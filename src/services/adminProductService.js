@@ -1,17 +1,8 @@
 import apiClient from "./apiClient";
 
-/**
- * خدمة إدارة المنتجات الخاصة بلوحة التحكم (Admin Panel)
- */
 export const adminProductService = {
-  /**
-   * 1️⃣ إضافة منتج جديد
-   * يرسل البيانات إلى جداول ShortItemNo و Product و ProductImage في خطوة واحدة
-   * @param {Object} productData - كائن يحتوي على كافة بيانات المنتج
-   */
   addNewProduct: async (productData) => {
     try {
-      // تجهيز البيانات لضمان إرسال أرقام صحيحة (Data Sanitization)
       const payload = {
         ...productData,
         price: parseFloat(productData.price) || 0,
@@ -20,42 +11,22 @@ export const adminProductService = {
         stock_quantity: parseFloat(productData.stock_quantity) || 0,
       };
 
-      console.log(
-        "📤 Sending new product to admin API:",
-        payload.short_item_no,
-      );
-
       const response = await apiClient.post("/products/admin/add", payload);
-
       return response.data;
     } catch (error) {
-      console.error(
-        "❌ adminProductService [addNewProduct] Error:",
-        error.response?.data?.detail || error.message,
-      );
       throw error;
     }
   },
 
-  /**
-   * 2️⃣ جلب كل الطلبات (للإدمن فقط)
-   */
   getAdminOrders: async () => {
     try {
       const response = await apiClient.get("/orders/admin/all");
       return response.data;
     } catch (error) {
-      console.error(
-        "❌ adminProductService [getAdminOrders] Error:",
-        error.message,
-      );
       throw error;
     }
   },
 
-  /**
-   * 3️⃣ تحديث حالة طلب معين
-   */
   updateOrderStatus: async (orderId, status) => {
     try {
       const response = await apiClient.patch(
@@ -67,10 +38,27 @@ export const adminProductService = {
       );
       return response.data;
     } catch (error) {
-      console.error(
-        `❌ adminProductService [updateOrderStatus] Error:`,
-        error.message,
+      throw error;
+    }
+  },
+
+  updateProduct: async (productId, updatedData) => {
+    try {
+      const response = await apiClient.put(
+        `/products/admin/${productId}`,
+        updatedData,
       );
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  deleteProduct: async (productId) => {
+    try {
+      const response = await apiClient.delete(`/products/admin/${productId}`);
+      return response.data;
+    } catch (error) {
       throw error;
     }
   },

@@ -99,10 +99,10 @@ const LoginScreen = ({ navigation }) => {
             </Text>
           </View>
 
-          {/* Google Login Section (Simplified) */}
+          {/* Google Login Section */}
           <View style={styles.formSection}>
             <TouchableOpacity
-              style={styles.primaryGoogleBtn} // 👈 استخدمنا ستايل جديد لزر جوجل الأساسي
+              style={styles.primaryGoogleBtn}
               onPress={() => {
                 setIsLoading(true);
                 handleGoogleLoginWeb();

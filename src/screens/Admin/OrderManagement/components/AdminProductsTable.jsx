@@ -8,8 +8,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Modal, // 👈 ضفنا المودال
-  TextInput, // 👈 عشان الفورم
+  Modal,
+  TextInput,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 
@@ -21,11 +21,9 @@ const AdminProductsTable = () => {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🌟 State الخاصة بالـ Pop-up (المودال) والتعديل
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  // 🌟 State الخاصة ببيانات الفورم اللي جوه المودال
   const [editForm, setEditForm] = useState({
     name: "",
     price: "",
@@ -48,10 +46,8 @@ const AdminProductsTable = () => {
     fetchProducts();
   }, []);
 
-  // 🟢 دالة فتح المودال وتعبئة البيانات
   const handleOpenEdit = (product) => {
     setSelectedProduct(product);
-    // بنملى الفورم بالبيانات الحالية للمنتج عشان الإدمن يلاقيها مكتوبة قدامه
     setEditForm({
       name: product.ar_name || product.en_name || "",
       price: product.final_price?.toString() || "0",
@@ -60,9 +56,7 @@ const AdminProductsTable = () => {
     setEditModalVisible(true);
   };
 
-  // 🟢 دالة حفظ التعديلات
   const handleSaveEdit = () => {
-    // هنا هتبعت الريكويست للباك إند للتعديل
     console.log(
       "تم تعديل المنتج ID:",
       selectedProduct.id,
@@ -70,7 +64,6 @@ const AdminProductsTable = () => {
       editForm,
     );
 
-    // تعديل المنتج في الجدول قدام الإدمن فوراً (عشان يحس بالسرعة)
     setProducts((prevProducts) =>
       prevProducts.map((p) =>
         p.id === selectedProduct.id
@@ -84,7 +77,6 @@ const AdminProductsTable = () => {
       ),
     );
 
-    // نقفل المودال
     setEditModalVisible(false);
     Alert.alert("نجاح", "تم تعديل بيانات المنتج بنجاح!");
   };
@@ -96,7 +88,6 @@ const AdminProductsTable = () => {
         text: "حذف",
         style: "destructive",
         onPress: () => {
-          // هنا هتحط API الحذف
           setProducts((prev) => prev.filter((p) => p.id !== productId));
         },
       },
@@ -119,7 +110,6 @@ const AdminProductsTable = () => {
   );
 
   const renderRow = ({ item, index }) => (
-    // ضفنا لون مختلف للصفوف الزوجية عشان شكل الجدول يبقى أريح للعين
     <View style={[styles.tableRow, index % 2 === 0 && styles.rowEven]}>
       <Text style={[styles.cellText, { width: 60 }]}>{item.id}</Text>
       <View style={[styles.cellImageContainer, { width: 70 }]}>
@@ -184,17 +174,15 @@ const AdminProductsTable = () => {
         </View>
       </ScrollView>
 
-      {/* 🌟 الـ Modal بتاع التعديل 🌟 */}
       <Modal
         visible={isEditModalVisible}
-        transparent={true} // عشان الخلفية تبقى شفافة ونشوف الصفحة وراها
+        transparent={true}
         animationType="fade"
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>تعديل بيانات المنتج</Text>
 
-            {/* حقل اسم المنتج */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>اسم المنتج</Text>
               <TextInput
@@ -206,7 +194,6 @@ const AdminProductsTable = () => {
               />
             </View>
 
-            {/* حقل السعر */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>السعر (ج.م)</Text>
               <TextInput
@@ -219,7 +206,6 @@ const AdminProductsTable = () => {
               />
             </View>
 
-            {/* حقل الكمية */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>الكمية المتاحة</Text>
               <TextInput
@@ -232,7 +218,6 @@ const AdminProductsTable = () => {
               />
             </View>
 
-            {/* زراير الحفظ والإلغاء */}
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, styles.cancelBtn]}

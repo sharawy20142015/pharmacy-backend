@@ -1,5 +1,3 @@
-// src/screens/CheckoutScreen/CheckoutScreen.jsx
-
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
@@ -31,10 +29,8 @@ const CheckoutScreen = () => {
   const route = useRoute();
   const { width } = useWindowDimensions();
 
-  // جلب بيانات السلة المركزية
   const { cartItems, clearCart, updateQty } = useCart();
 
-  // --- 1. كافة الـ States في بداية المكون ---
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -59,7 +55,6 @@ const CheckoutScreen = () => {
     phone: "",
   });
 
-  // --- 2. تعريف القيم المحسوبة فوراً ---
   const isDesktop = width >= 1024;
   const itemsToRender = expressItem ? [expressItem] : cartItems;
 
@@ -75,7 +70,6 @@ const CheckoutScreen = () => {
     : 0;
   const total = Math.max(0, subtotal + deliveryFee - pointsDiscountMoney);
 
-  // --- 3. الـ Effects والـ Handlers التفاعلية ---
   useEffect(() => {
     const initializeCheckout = async () => {
       try {
@@ -179,18 +173,15 @@ const CheckoutScreen = () => {
 
       const orderPayload = {
         customer_id: currentUser?.id || currentUser?.user?.id || null,
-
         cart_items: itemsToRender.map((i) => {
           if (i.isBundle) {
-            // لو العنصر عبارة عن باقة، بنبعت تفاصيل هيكلية كاملة تفك اللبس للباك إند
             return {
-              product_id: i.id, // كود الباقة الأب (e.g. "bundle_pkg_maternity_01")
+              product_id: i.id,
               quantity: parseInt(i.qty || 1),
-              is_bundle: true, // علم (Flag) صريح عشان سيرفر FastAPI يلقطه
-              bundle_items: i.bundleProducts.map((p) => p.product_id), // 👈 لستة الـ IDs الحقيقية للمنتجين اللي اخترناهم بس!
+              is_bundle: true,
+              bundle_items: i.bundleProducts.map((p) => p.product_id),
             };
           }
-          // لو منتج عادي مسالم، بيتبعت بشكل طبيعي فلات
           return {
             product_id: parseInt(i.id),
             quantity: parseInt(i.qty || i.quantity) || 1,
@@ -198,7 +189,6 @@ const CheckoutScreen = () => {
             bundle_items: [],
           };
         }),
-
         points_to_redeem: isUsingPoints ? Number(userPoints) : 0,
         shipping_first_name: addressData.firstName,
         shipping_last_name: addressData.lastName || "",
@@ -298,7 +288,9 @@ const CheckoutScreen = () => {
               { flexDirection: isDesktop ? "row-reverse" : "column" },
             ]}
           >
-            <View style={{ flex: isDesktop ? 8 : 1, width: "100%" }}>
+            <View
+              style={isDesktop ? { flex: 8, width: "100%" } : { width: "100%" }}
+            >
               <Text style={styles.pageTitle}>إتمام الطلب</Text>
 
               <View style={styles.sectionCard}>
@@ -389,7 +381,9 @@ const CheckoutScreen = () => {
               </View>
             </View>
 
-            <View style={{ flex: isDesktop ? 4 : 1, width: "100%" }}>
+            <View
+              style={isDesktop ? { flex: 4, width: "100%" } : { width: "100%" }}
+            >
               <OrderSummary
                 styles={styles}
                 COLORS={COLORS}
