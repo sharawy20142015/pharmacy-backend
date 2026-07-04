@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
+import { useQuery } from "@tanstack/react-query"; // 👈 استيراد React Query
 
 import { styles } from "./ProductDetailsScreen.styles";
 import { productService } from "../../services/productService";
@@ -32,14 +33,35 @@ const ProductDetailsScreen = () => {
   const isDesktop = width >= 1024;
   const isMobile = width < 768;
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [relatedProducts, setRelatedProducts] = useState([]);
-
   const { cartItems, addToCart, removeFromCart } = useCart();
+
+  // 1️⃣ جلب تفاصيل المنتج الأساسي
+  const { data: product, isLoading: isProductLoading } = useQuery({
+    queryKey: ["product", productId],
+    queryFn: () => productService.getProductById(productId),
+    enabled: !!productId, // متشتغلش إلا لو الـ ID موجود
+  });
+
+  // استخراج قسم المنتج عشان نستخدمه في الطلب التاني
+  const categorySlug = product?.categories?.[0]?.slug;
+
+  // 2️⃣ جلب المنتجات المشابهة (هتشتغل أوتوماتيك لما الـ categorySlug يتوفر)
+  const { data: relatedProducts = [] } = useQuery({
+    queryKey: ["relatedProducts", categorySlug],
+    queryFn: async () => {
+      const allProducts = await productService.getAllProducts({
+        is_active: 1,
+        limit: 10,
+        ...(categorySlug && { category_slug: categorySlug }),
+      });
+      return allProducts.filter((p) => p.id !== productId).slice(0, 5);
+    },
+    enabled: !!categorySlug, // 👈 مش هيشتغل إلا لما المنتج الأساسي ييجي ونعرف قسمه
+  });
+
   const isInCart = product
-    ? cartItems.some((item) => item.id === product.id)
+    ? cartItems.some((item) => item.id === product?.id)
     : false;
 
   const handleCartAction = () =>
@@ -62,7 +84,9 @@ const ProductDetailsScreen = () => {
           ? window.location.href
           : `https://nabdpharmacy.com/product/${productId}`;
 
-      const shareMessage = `شاهد هذا المنتج على صيدلية نبض: ${product.en_name || product.ar_name}\n\nالرابط: ${productUrl}`;
+      const shareMessage = `شاهد هذا المنتج على صيدلية نبض: ${
+        product.en_name || product.ar_name
+      }\n\nالرابط: ${productUrl}`;
 
       await Share.share({
         message: shareMessage,
@@ -72,36 +96,8 @@ const ProductDetailsScreen = () => {
     } catch (error) {}
   };
 
-  useEffect(() => {
-    const getDetails = async () => {
-      if (!productId) return;
-      try {
-        setIsLoading(true);
-        const productData = await productService.getProductById(productId);
-        if (productData) {
-          setProduct(productData);
-
-          const categorySlug = productData.categories?.[0]?.slug;
-          const allProducts = await productService.getAllProducts({
-            is_active: 1,
-            limit: 10,
-            ...(categorySlug && { category_slug: categorySlug }),
-          });
-          if (allProducts && allProducts.length > 0) {
-            setRelatedProducts(
-              allProducts.filter((p) => p.id !== productId).slice(0, 5),
-            );
-          }
-        }
-      } catch (error) {
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    getDetails();
-  }, [productId]);
-
-  if (isLoading) return <LoadingScreen />;
+  // لو المنتج الأساسي بيحمل، اعرض شاشة التحميل
+  if (isProductLoading) return <LoadingScreen />;
   if (!product) return null;
 
   return (

@@ -179,3 +179,55 @@ async def get_product_details(product_id: int, db: AsyncSession = Depends(get_db
     if not product_obj: 
         raise HTTPException(status_code=404, detail="Product not found")
     return ProductShopRead.map_from_orm(product_obj)
+
+
+
+
+@router.get("/{product_id}/related", response_model=List[ProductShopRead])
+@cache(expire=300) # كاش لمدة 5 دقايق عشان الأداء يكون طيارة
+async def get_related_products(
+    product_id: int,
+    limit: int = Query(default=5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db)
+):
+    # 1. نجيب المنتج الحالي الأول عشان نعرف الأقسام بتاعته
+    product_query = (
+        select(Product)
+        .options(
+            selectinload(Product.item_details).selectinload(ShortItemNo.categories)
+        )
+        .where(Product.id == product_id, Product.is_active == True)
+    )
+    result = await db.execute(product_query)
+    product_obj = result.unique().scalars().first()
+
+    # لو المنتج مش موجود أو ملوش أقسام، نرجع لستة فاضية
+    if not product_obj or not product_obj.item_details or not product_obj.item_details.categories:
+        return []
+
+    # ناخد الـ IDs بتاعت أقسام المنتج ده
+    category_ids = [c.id for c in product_obj.item_details.categories]
+
+    # 2. نجيب المنتجات اللي في نفس الأقسام (ومايكونش نفس المنتج) ومتاحة في المخزن
+    related_query = (
+        select(Product)
+        .join(Product.item_details)
+        .join(ShortItemNo.categories)
+        .options(
+            selectinload(Product.item_details).selectinload(ShortItemNo.additional_images),
+            selectinload(Product.item_details).selectinload(ShortItemNo.categories)
+        )
+        .where(
+            Category.id.in_(category_ids),
+            Product.id != product_id, # نستبعد المنتج الحالي
+            Product.is_active == True,
+            Product.stock_quantity > 0 # لازم يكون متوفر في المخزن
+        )
+        .order_by(func.random()) # (اختياري) عشان يجيب منتجات عشوائية كل مرة من نفس القسم 
+        .limit(limit)
+    )
+    
+    related_result = await db.execute(related_query)
+    related_objs = related_result.unique().scalars().all()
+
+    return [ProductShopRead.map_from_orm(p) for p in related_objs]
